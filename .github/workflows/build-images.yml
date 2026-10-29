@@ -15,7 +15,8 @@
 # 产物标签（GHCR）：
 #   ghcr.io/<owner>/<repo>:<version>        多架构清单
 #   ghcr.io/<owner>/<repo>:v<major>         大版本别名
-#   ghcr.io/<owner>/<repo>:latest           仅默认分支/发布时
+#   ghcr.io/<owner>/<repo>:latest           每次构建都推（自更新默认拉取点）
+#   ghcr.io/<owner>/<repo>:nightly          每次构建都推（显式跟随 master 滚动）
 #   ghcr.io/<owner>/<repo>:sha-<short>      每次构建都打，可精确回溯
 #   ghcr.io/<owner>/<repo>:<version>-<arch> 单架构（调试用，也供 manifest 引用）
 
@@ -33,7 +34,7 @@ on:
         required: false
         type: string
       publish_latest:
-        description: "同时推送 :latest 标签"
+        description: "同时推送 :latest / :nightly 标签"
         required: false
         type: boolean
         default: true
@@ -108,8 +109,9 @@ jobs:
           image="${REGISTRY}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
           echo "image=${image}" >> "$GITHUB_OUTPUT"
 
-          # latest 只在发布或显式开启时推送，避免 nightly 覆盖稳定版
-          if [ "${is_release}" = "true" ] && [ "${INPUT_PUBLISH_LATEST:-true}" = "true" ]; then
+          # latest / nightly 每次构建都滚动，供容器自更新拉取；
+          # 只有手动构建显式关掉时才不推。
+          if [ "${INPUT_PUBLISH_LATEST:-true}" = "true" ]; then
             echo "push_latest=true" >> "$GITHUB_OUTPUT"
           else
             echo "push_latest=false" >> "$GITHUB_OUTPUT"
@@ -299,10 +301,12 @@ jobs:
             docker buildx imagetools create -t "${IMAGE}:${MAJOR}" "${src[@]}"
           fi
 
-          # latest：可关闭
+          # latest + nightly：每次构建都滚动，供容器自更新拉取
           if [ "${PUSH_LATEST}" = "true" ]; then
-            echo "==> manifest ${IMAGE}:latest"
-            docker buildx imagetools create -t "${IMAGE}:latest" "${src[@]}"
+            for tag in latest nightly; do
+              echo "==> manifest ${IMAGE}:${tag}"
+              docker buildx imagetools create -t "${IMAGE}:${tag}" "${src[@]}"
+            done
           fi
 
       - name: Summary
@@ -324,7 +328,8 @@ jobs:
             echo "| \`${IMAGE}:${VERSION}\` | 多架构（amd64 + arm64） |"
             echo "| \`${IMAGE}:${MAJOR}\` | 大版本别名 |"
             if [ "${PUSH_LATEST}" = "true" ]; then
-              echo "| \`${IMAGE}:latest\` | 最新稳定 |"
+              echo "| \`${IMAGE}:latest\` | 最新构建（滚动） |"
+              echo "| \`${IMAGE}:nightly\` | 跟随 master 滚动（自更新推荐） |"
             fi
             echo ""
             echo "单架构调试标签：\`${IMAGE}:${VERSION}-amd64\` / \`${IMAGE}:${VERSION}-arm64\`"
