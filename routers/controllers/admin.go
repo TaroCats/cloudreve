@@ -589,6 +589,47 @@ func AdminBatchDeleteShare(c *gin.Context) {
 	c.JSON(200, serializer.Response{})
 }
 
+// AdminListAbuseReports lists filed abuse reports
+func AdminListAbuseReports(c *gin.Context) {
+	service := ParametersFromContext[*admin.AdminListService](c, admin.AdminListServiceParamsCtx{})
+	res, err := service.ListAbuseReports(c)
+	if err != nil {
+		c.JSON(200, serializer.Err(c, err))
+		return
+	}
+	c.JSON(200, serializer.Response{Data: res})
+}
+
+// AdminBatchDeleteAbuseReports dismisses abuse reports in batch
+func AdminBatchDeleteAbuseReports(c *gin.Context) {
+	service := ParametersFromContext[*admin.BatchAbuseReportService](c, admin.BatchAbuseReportParamCtx{})
+	if err := admin.DeleteAbuseReports(c, service.ReportIDs); err != nil {
+		c.JSON(200, serializer.Err(c, err))
+		return
+	}
+	c.JSON(200, serializer.Response{})
+}
+
+func AdminListAuditLogs(c *gin.Context) {
+	service := ParametersFromContext[*admin.AdminListService](c, admin.AdminListServiceParamsCtx{})
+	res, err := service.AuditLogs(c)
+	if err != nil {
+		c.JSON(200, serializer.Err(c, err))
+		return
+	}
+	c.JSON(200, serializer.Response{Data: res})
+}
+
+func AdminBatchDeleteAuditLog(c *gin.Context) {
+	service := ParametersFromContext[*admin.BatchAuditLogService](c, admin.BatchAuditLogParamCtx{})
+	err := service.Delete(c)
+	if err != nil {
+		c.JSON(200, serializer.Err(c, err))
+		return
+	}
+	c.JSON(200, serializer.Response{})
+}
+
 func AdminCalibrateStorage(c *gin.Context) {
 	service := ParametersFromContext[*admin.SingleUserService](c, admin.SingleUserParamCtx{})
 	res, err := service.CalibrateStorage(c)

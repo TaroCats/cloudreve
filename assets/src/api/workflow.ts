@@ -6,6 +6,8 @@ export interface ArchiveWorkflowService {
   encoding?: string;
   password?: string;
   file_mask?: string[];
+  /** Preferred processing node; requires the select_node group permission. */
+  node_id?: number;
 }
 
 export interface TaskListResponse {
@@ -101,6 +103,8 @@ export interface DownloadWorkflowService {
   src?: string[];
   src_file?: string;
   dst: string;
+  /** Preferred processing node; requires the select_node group permission. */
+  node_id?: number;
 }
 
 export interface ImportWorkflowService {

@@ -12,6 +12,7 @@ import (
 	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/manager"
 	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
 	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
+	usersvc "github.com/cloudreve/Cloudreve/v4/service/user"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/samber/lo"
@@ -213,6 +214,9 @@ func (s *UpsertUserService) Create(c *gin.Context) (*GetUserResponse, error) {
 	if err != nil {
 		return nil, serializer.NewError(serializer.CodeDBError, "Failed to create user", err)
 	}
+
+	// Seed default share shortcuts into the new user's root.
+	usersvc.CreateDefaultSymbolics(c, dep, user)
 
 	service := &SingleUserService{ID: user.ID}
 	return service.Get(c)

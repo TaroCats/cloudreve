@@ -37,6 +37,8 @@ const (
 	EdgeUser = "user"
 	// EdgeFile holds the string denoting the file edge name in mutations.
 	EdgeFile = "file"
+	// EdgeAbuseReports holds the string denoting the abuse_reports edge name in mutations.
+	EdgeAbuseReports = "abuse_reports"
 	// Table holds the table name of the share in the database.
 	Table = "shares"
 	// UserTable is the table that holds the user relation/edge.
@@ -53,6 +55,13 @@ const (
 	FileInverseTable = "files"
 	// FileColumn is the table column denoting the file relation/edge.
 	FileColumn = "file_shares"
+	// AbuseReportsTable is the table that holds the abuse_reports relation/edge.
+	AbuseReportsTable = "abuse_reports"
+	// AbuseReportsInverseTable is the table name for the AbuseReport entity.
+	// It exists in this package in order to avoid circular dependency with the "abusereport" package.
+	AbuseReportsInverseTable = "abuse_reports"
+	// AbuseReportsColumn is the table column denoting the abuse_reports relation/edge.
+	AbuseReportsColumn = "share_id"
 )
 
 // Columns holds all SQL columns for share fields.
@@ -172,6 +181,20 @@ func ByFileField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newFileStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// ByAbuseReportsCount orders the results by abuse_reports count.
+func ByAbuseReportsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newAbuseReportsStep(), opts...)
+	}
+}
+
+// ByAbuseReports orders the results by abuse_reports terms.
+func ByAbuseReports(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newAbuseReportsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newUserStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -184,5 +207,12 @@ func newFileStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(FileInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, FileTable, FileColumn),
+	)
+}
+func newAbuseReportsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(AbuseReportsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, AbuseReportsTable, AbuseReportsColumn),
 	)
 }

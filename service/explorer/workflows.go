@@ -74,9 +74,25 @@ type (
 		Src     []string `json:"src"`
 		SrcFile string   `json:"src_file"`
 		Dst     string   `json:"dst" binding:"required"`
+		NodeID  int      `json:"node_id"`
 	}
 	CreateDownloadParamCtx struct{}
 )
+
+// validateNodeSelection checks that the caller may pin a task to a specific
+// processing node and that the node is within the group's allowed set.
+func validateNodeSelection(user *ent.User, nodeID int) error {
+	if nodeID <= 0 {
+		return nil
+	}
+	if !user.Edges.Group.Permissions.Enabled(int(types.GroupPermissionSelectNode)) {
+		return serializer.NewError(serializer.CodeGroupNotAllowed, "Group not allowed to select processing nodes", nil)
+	}
+	if allowed := user.Edges.Group.Settings.AllowedNodes; len(allowed) > 0 && !lo.Contains(allowed, nodeID) {
+		return serializer.NewError(serializer.CodeGroupNotAllowed, "Node is not in the group's allowed node list", nil)
+	}
+	return nil
+}
 
 func (service *DownloadWorkflowService) CreateDownloadTask(c *gin.Context) ([]*TaskResponse, error) {
 	dep := dependency.FromContext(c)
@@ -87,6 +103,10 @@ func (service *DownloadWorkflowService) CreateDownloadTask(c *gin.Context) ([]*T
 
 	if !user.Edges.Group.Permissions.Enabled(int(types.GroupPermissionRemoteDownload)) {
 		return nil, serializer.NewError(serializer.CodeGroupNotAllowed, "Group not allowed to download files", nil)
+	}
+
+	if err := validateNodeSelection(user, service.NodeID); err != nil {
+		return nil, err
 	}
 
 	// Src must be set
@@ -137,7 +157,7 @@ func (service *DownloadWorkflowService) CreateDownloadTask(c *gin.Context) ([]*T
 			continue
 		}
 
-		t, err := workflows.NewRemoteDownloadTask(c, src, service.SrcFile, service.Dst)
+		t, err := workflows.NewRemoteDownloadTask(c, src, service.SrcFile, service.Dst, service.NodeID)
 		if err != nil {
 			ae.Add(src, err)
 			continue
@@ -151,7 +171,7 @@ func (service *DownloadWorkflowService) CreateDownloadTask(c *gin.Context) ([]*T
 	}
 
 	if service.SrcFile != "" {
-		t, err := workflows.NewRemoteDownloadTask(c, "", service.SrcFile, service.Dst)
+		t, err := workflows.NewRemoteDownloadTask(c, "", service.SrcFile, service.Dst, service.NodeID)
 		if err != nil {
 			ae.Add(service.SrcFile, err)
 		}
@@ -175,6 +195,7 @@ type (
 		Encoding string   `json:"encoding"`
 		Password string   `json:"password"`
 		FileMask []string `json:"file_mask"`
+		NodeID   int      `json:"node_id"`
 	}
 	CreateArchiveParamCtx struct{}
 )
@@ -188,6 +209,10 @@ func (service *ArchiveWorkflowService) CreateExtractTask(c *gin.Context) (*TaskR
 
 	if !user.Edges.Group.Permissions.Enabled(int(types.GroupPermissionArchiveTask)) {
 		return nil, serializer.NewError(serializer.CodeGroupNotAllowed, "Group not allowed to compress files", nil)
+	}
+
+	if err := validateNodeSelection(user, service.NodeID); err != nil {
+		return nil, err
 	}
 
 	dst, err := fs.NewUriFromString(service.Dst)
@@ -205,7 +230,7 @@ func (service *ArchiveWorkflowService) CreateExtractTask(c *gin.Context) (*TaskR
 	}
 
 	// Create task
-	t, err := workflows.NewExtractArchiveTask(c, service.Src[0], service.Dst, service.Encoding, service.Password, service.FileMask)
+	t, err := workflows.NewExtractArchiveTask(c, service.Src[0], service.Dst, service.Encoding, service.Password, service.FileMask, service.NodeID)
 	if err != nil {
 		return nil, serializer.NewError(serializer.CodeCreateTaskError, "Failed to create task", err)
 	}
@@ -229,6 +254,10 @@ func (service *ArchiveWorkflowService) CreateCompressTask(c *gin.Context) (*Task
 		return nil, serializer.NewError(serializer.CodeGroupNotAllowed, "Group not allowed to compress files", nil)
 	}
 
+	if err := validateNodeSelection(user, service.NodeID); err != nil {
+		return nil, err
+	}
+
 	dst, err := fs.NewUriFromString(service.Dst)
 	if err != nil {
 		return nil, serializer.NewError(serializer.CodeParamErr, "Invalid destination", err)
@@ -249,7 +278,7 @@ func (service *ArchiveWorkflowService) CreateCompressTask(c *gin.Context) (*Task
 	m.OnUploadFailed(c, session)
 
 	// Create task
-	t, err := workflows.NewCreateArchiveTask(c, service.Src, service.Dst)
+	t, err := workflows.NewCreateArchiveTask(c, service.Src, service.Dst, service.NodeID)
 	if err != nil {
 		return nil, serializer.NewError(serializer.CodeCreateTaskError, "Failed to create task", err)
 	}
@@ -493,13 +522,21 @@ type (
 
 // CreateMigratePolicyTask starts a background job that copies every entity
 // from one storage policy to another and repoints the entity records.
+// Admins migrate all entities on the source policy; regular users need the
+// migrate_policy group permission and only migrate their own files.
 func (service *MigratePolicyWorkflowService) CreateMigratePolicyTask(c *gin.Context) (*TaskResponse, error) {
 	dep := dependency.FromContext(c)
 	user := inventory.UserFromContext(c)
 	hasher := dep.HashIDEncoder()
 
-	if !user.Edges.Group.Permissions.Enabled(int(types.GroupPermissionIsAdmin)) {
-		return nil, serializer.NewError(serializer.CodeGroupNotAllowed, "Only admin can migrate storage policies", nil)
+	isAdmin := user.Edges.Group.Permissions.Enabled(int(types.GroupPermissionIsAdmin))
+	ownerID := 0
+	if !isAdmin {
+		if !user.Edges.Group.Permissions.Enabled(int(types.GroupPermissionMigratePolicy)) {
+			return nil, serializer.NewError(serializer.CodeGroupNotAllowed, "Group permission denied", nil)
+		}
+		// Non-admins can only migrate their own files.
+		ownerID = user.ID
 	}
 
 	if service.SrcPolicyID == service.DstPolicyID {
@@ -514,7 +551,7 @@ func (service *MigratePolicyWorkflowService) CreateMigratePolicyTask(c *gin.Cont
 		return nil, serializer.NewError(serializer.CodePolicyNotExist, "Destination policy not found", err)
 	}
 
-	t, err := workflows.NewMigratePolicyTask(c, user, service.SrcPolicyID, service.DstPolicyID, service.DeleteSource)
+	t, err := workflows.NewMigratePolicyTask(c, user, service.SrcPolicyID, service.DstPolicyID, service.DeleteSource, ownerID)
 	if err != nil {
 		return nil, serializer.NewError(serializer.CodeCreateTaskError, "Failed to create task", err)
 	}

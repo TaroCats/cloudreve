@@ -29,15 +29,16 @@ type (
 	// MigratePolicyTaskState is persisted between runs so an interrupted
 	// migration resumes from the last successfully moved entity.
 	MigratePolicyTaskState struct {
-		SrcPolicyID   int    `json:"src_policy_id"`
-		DstPolicyID   int    `json:"dst_policy_id"`
-		Total         int    `json:"total"`
-		Migrated      int    `json:"migrated"`
-		Failed        int    `json:"failed"`
-		BytesMoved    int64  `json:"bytes_moved"`
-		LastEntityID  int    `json:"last_entity_id"`
-		DeleteSource  bool   `json:"delete_source"`
-		LastError     string `json:"last_error,omitempty"`
+		SrcPolicyID  int  `json:"src_policy_id"`
+		DstPolicyID  int  `json:"dst_policy_id"`
+		OwnerID      int  `json:"owner_id,omitempty"` // 0 = all owners (admin)
+		Total        int  `json:"total"`
+		Migrated     int  `json:"migrated"`
+		Failed       int  `json:"failed"`
+		BytesMoved   int64 `json:"bytes_moved"`
+		LastEntityID int  `json:"last_entity_id"`
+		DeleteSource bool `json:"delete_source"`
+		LastError    string `json:"last_error,omitempty"`
 	}
 )
 
@@ -51,7 +52,7 @@ func init() {
 	queue.RegisterResumableTaskFactory(queue.PolicyMigrateTaskType, NewMigratePolicyTaskFromModel)
 }
 
-func NewMigratePolicyTask(ctx context.Context, u *ent.User, srcPolicyID, dstPolicyID int, deleteSource bool) (queue.Task, error) {
+func NewMigratePolicyTask(ctx context.Context, u *ent.User, srcPolicyID, dstPolicyID int, deleteSource bool, ownerID int) (queue.Task, error) {
 	if srcPolicyID <= 0 || dstPolicyID <= 0 || srcPolicyID == dstPolicyID {
 		return nil, fmt.Errorf("invalid source/destination storage policy: %w", queue.CriticalErr)
 	}
@@ -59,6 +60,7 @@ func NewMigratePolicyTask(ctx context.Context, u *ent.User, srcPolicyID, dstPoli
 	state := &MigratePolicyTaskState{
 		SrcPolicyID:  srcPolicyID,
 		DstPolicyID:  dstPolicyID,
+		OwnerID:      ownerID,
 		DeleteSource: deleteSource,
 	}
 	stateBytes, err := json.Marshal(state)
@@ -126,12 +128,19 @@ func (m *MigratePolicyTask) migrateBatch(ctx context.Context, dep dependency.Dep
 	sc := dep.StoragePolicyClient()
 
 	if m.state.Total == 0 {
-		count, _, err := fc.CountEntityByStoragePolicyID(ctx, m.state.SrcPolicyID)
+		countRes, err := fc.ListEntities(ctx, &inventory.ListEntityParameters{
+			UserID:          m.state.OwnerID,
+			StoragePolicyID: m.state.SrcPolicyID,
+			PaginationArgs: &inventory.PaginationArgs{
+				Page:     0,
+				PageSize: 1,
+			},
+		})
 		if err != nil {
 			return task.StatusError, fmt.Errorf("failed to count entities: %w", queue.CriticalErr)
 		}
-		m.state.Total = count
-		if count == 0 {
+		m.state.Total = countRes.PaginationResults.TotalItems
+		if m.state.Total == 0 {
 			return task.StatusCompleted, nil
 		}
 	}
@@ -149,10 +158,14 @@ func (m *MigratePolicyTask) migrateBatch(ctx context.Context, dep dependency.Dep
 	defer mgr.Recycle()
 
 	entities, err := fc.ListEntities(ctx, &inventory.ListEntityParameters{
+		UserID:          m.state.OwnerID,
 		StoragePolicyID: m.state.SrcPolicyID,
+		IDAfter:         m.state.LastEntityID,
 		PaginationArgs: &inventory.PaginationArgs{
-			Page:     1,
+			Page:     0,
 			PageSize: MigratePolicyBatchSize,
+			OrderBy:  "id",
+			Order:    "asc",
 		},
 	})
 	if err != nil {

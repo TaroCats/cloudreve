@@ -18,6 +18,8 @@ import {
   GetSettingService,
   GroupEnt,
   HomepageSummary,
+  ListAbuseReportResponse,
+  ListAuditLogResponse,
   ListEntityResponse,
   ListFileResponse,
   ListNodeResponse,
@@ -42,6 +44,8 @@ import {
   UpsertStoragePolicyService,
   UpsertUserService,
   User as UserEnt,
+  UserPoliciesResponse,
+  UserNodesResponse,
 } from "./dashboard.ts";
 import {
   ArchiveListFilesResponse,
@@ -133,15 +137,13 @@ export function getSiteConfig(section: string): ThunkResponse<SiteConfig> {
   };
 }
 
-export function sendPrepareLogin(email: string): ThunkResponse<PrepareLoginResponse> {
+export function sendPrepareLogin(email?: string): ThunkResponse<PrepareLoginResponse> {
   return async (dispatch, _getState) => {
     return await dispatch(
       send(
         "/session/prepare",
         {
-          params: {
-            email: email,
-          },
+          params: email ? { email: email } : {},
           method: "GET",
         },
         {
@@ -502,6 +504,34 @@ export function getSearchUser(keyword: string): ThunkResponse<User[]> {
         {
           method: "GET",
         },
+        {
+          ...defaultOpts,
+        },
+      ),
+    );
+  };
+}
+
+export function getUserNodes(): ThunkResponse<UserNodesResponse> {
+  return async (dispatch, _getState) => {
+    return await dispatch(
+      send(
+        `/user/nodes`,
+        { method: "GET" },
+        {
+          ...defaultOpts,
+        },
+      ),
+    );
+  };
+}
+
+export function getUserPolicies(): ThunkResponse<UserPoliciesResponse> {
+  return async (dispatch, _getState) => {
+    return await dispatch(
+      send(
+        `/user/policies`,
+        { method: "GET" },
         {
           ...defaultOpts,
         },
@@ -1972,6 +2002,76 @@ export function batchDeleteShares(args: BatchIDService): ThunkResponse<void> {
       send(
         `/admin/share/batch/delete`,
         { method: "POST", data: args },
+        {
+          ...defaultOpts,
+        },
+      ),
+    );
+  };
+}
+
+export function sendReportShare(id: string, reason: string): ThunkResponse<void> {
+  return async (dispatch, _getState) => {
+    return await dispatch(
+      send(
+        `/share/report/${id}`,
+        { method: "POST", data: { reason } },
+        {
+          ...defaultOpts,
+        },
+      ),
+    );
+  };
+}
+
+export function getAbuseReports(args: AdminListService): ThunkResponse<ListAbuseReportResponse> {
+  return async (dispatch, _getState) => {
+    return await dispatch(
+      send(
+        `/admin/abuse`,
+        { method: "POST", data: args },
+        {
+          ...defaultOpts,
+        },
+      ),
+    );
+  };
+}
+
+export function batchDeleteAbuseReports(ids: number[]): ThunkResponse<void> {
+  return async (dispatch, _getState) => {
+    return await dispatch(
+      send(
+        `/admin/abuse/batch/delete`,
+        { method: "POST", data: { ids } },
+        {
+          ...defaultOpts,
+        },
+      ),
+    );
+  };
+}
+
+export function getAuditLogs(args: AdminListService): ThunkResponse<ListAuditLogResponse> {
+  return async (dispatch, _getState) => {
+    return await dispatch(
+      send(
+        `/admin/event/list`,
+        { method: "POST", data: args },
+        {
+          ...defaultOpts,
+        },
+      ),
+    );
+  };
+}
+
+export function batchDeleteAuditLogs(ids: number[]): ThunkResponse<void> {
+  return async (dispatch, _getState) => {
+    return await dispatch(
+      send(
+        `/admin/event/batch/delete`,
+        { method: "POST", data: { ids } },
         {
           ...defaultOpts,
         },

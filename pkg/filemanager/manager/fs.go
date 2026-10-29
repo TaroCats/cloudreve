@@ -84,6 +84,10 @@ func (m *manager) GetStorageDriver(ctx context.Context, policy *ent.StoragePolic
 		return upyun.New(ctx, policy, m.settings, m.config, m.l, m.dep.MimeDetector(ctx))
 	case types.PolicyTypeOd:
 		return onedrive.New(ctx, policy, m.settings, m.config, m.l, m.dep.CredManager())
+	case types.PolicyTypeLoadBalance:
+		// Virtual policy: it should have been dereferenced to one of its
+		// member policies before any driver is needed.
+		return nil, ErrLoadBalancePolicyNotResolved
 	default:
 		return nil, ErrUnknownPolicyType
 	}

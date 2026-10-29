@@ -1,6 +1,8 @@
 package basic
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"sort"
 	"strings"
 
@@ -17,15 +19,17 @@ import (
 // SiteConfig 站点全局设置序列
 type SiteConfig struct {
 	// Basic Section
-	InstanceID     string                  `json:"instance_id,omitempty"`
-	SiteName       string                  `json:"title,omitempty"`
-	Themes         string                  `json:"themes,omitempty"`
-	DefaultTheme   string                  `json:"default_theme,omitempty"`
-	User           *user.User              `json:"user,omitempty"`
-	Logo           string                  `json:"logo,omitempty"`
-	LogoLight      string                  `json:"logo_light,omitempty"`
-	CustomNavItems []setting.CustomNavItem `json:"custom_nav_items,omitempty"`
-	CustomHTML     *setting.CustomHTML     `json:"custom_html,omitempty"`
+	InstanceID      string                  `json:"instance_id,omitempty"`
+	SiteName        string                  `json:"title,omitempty"`
+	Themes          string                  `json:"themes,omitempty"`
+	DefaultTheme    string                  `json:"default_theme,omitempty"`
+	User            *user.User              `json:"user,omitempty"`
+	Logo            string                  `json:"logo,omitempty"`
+	LogoLight       string                  `json:"logo_light,omitempty"`
+	CustomNavItems  []setting.CustomNavItem `json:"custom_nav_items,omitempty"`
+	CustomHTML      *setting.CustomHTML     `json:"custom_html,omitempty"`
+	Announcement    string                  `json:"announcement,omitempty"`
+	AnnouncementHash string                 `json:"announcement_hash,omitempty"`
 
 	// Login Section
 	LoginCaptcha     bool                `json:"login_captcha,omitempty"`
@@ -191,14 +195,22 @@ func (s *GetSettingService) GetSiteConfig(c *gin.Context) (*SiteConfig, error) {
 	appSetting := settings.AppSetting(c)
 	customNavItems := settings.CustomNavItems(c)
 	customHTML := settings.CustomHTML(c)
+	announcement := settings.Announcement(c)
+	announcementHash := ""
+	if announcement != "" {
+		sum := sha256.Sum256([]byte(announcement))
+		announcementHash = hex.EncodeToString(sum[:8])
+	}
 	return &SiteConfig{
-		InstanceID:      siteBasic.ID,
-		SiteName:        siteBasic.Name,
-		Themes:          themes.Themes,
-		DefaultTheme:    themes.DefaultTheme,
-		User:            &userRes,
-		Logo:            logo.Normal,
-		LogoLight:       logo.Light,
+		InstanceID:       siteBasic.ID,
+		SiteName:         siteBasic.Name,
+		Themes:           themes.Themes,
+		DefaultTheme:     themes.DefaultTheme,
+		User:             &userRes,
+		Logo:             logo.Normal,
+		LogoLight:        logo.Light,
+		Announcement:     announcement,
+		AnnouncementHash: announcementHash,
 		CaptchaType:     settings.CaptchaType(c),
 		TurnstileSiteID: settings.TurnstileCaptcha(c).Key,
 		ReCaptchaKey:    reCaptcha.Key,

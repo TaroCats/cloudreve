@@ -27,6 +27,7 @@ type (
 		Expire          int    `json:"expire"`
 		ShareView       bool   `json:"share_view"`
 		ShowReadMe      bool   `json:"show_readme"`
+		Editable        bool   `json:"editable"`
 	}
 	ShareCreateParamCtx struct{}
 
@@ -71,6 +72,12 @@ func (service *ShareCreateService) Upsert(c *gin.Context, existed int) (string, 
 		return "", serializer.NewError(serializer.CodeGroupNotAllowed, "Group permission denied", nil)
 	}
 
+	// Granting anonymous visitors write access requires the dedicated
+	// escalate_anonymity group permission.
+	if service.Editable && !user.Edges.Group.Permissions.Enabled(int(types.GroupPermissionEscalateAnonymity)) {
+		return "", serializer.NewError(serializer.CodeGroupNotAllowed, "Group not allowed to grant anonymous write access", nil)
+	}
+
 	uri, err := fs.NewUriFromString(service.Uri)
 	if err != nil {
 		return "", serializer.NewError(serializer.CodeParamErr, "unknown uri", err)
@@ -90,6 +97,7 @@ func (service *ShareCreateService) Upsert(c *gin.Context, existed int) (string, 
 		ExistedShareID:  existed,
 		ShareView:       service.ShareView,
 		ShowReadMe:      service.ShowReadMe,
+		Editable:        service.Editable,
 	})
 	if err != nil {
 		return "", err

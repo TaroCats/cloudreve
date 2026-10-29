@@ -135,6 +135,23 @@ func init() {
 		NavigatorCapabilityEnterFolder:    true,
 		NavigatorCapabilityModifyProps:    true,
 	}, shareNavigatorCapability)
+	// Editable shares additionally grant anonymous visitors write access.
+	boolset.Sets(map[NavigatorCapability]bool{
+		NavigatorCapabilityDownloadFile:   true,
+		NavigatorCapabilityListChildren:   true,
+		NavigatorCapabilityGenerateThumb:  true,
+		NavigatorCapabilityLockFile:       true,
+		NavigatorCapabilityInfo:           true,
+		NavigatorCapabilityVersionControl: true,
+		NavigatorCapabilityEnterFolder:    true,
+		NavigatorCapabilityModifyProps:    true,
+		NavigatorCapabilityCreateFile:     true,
+		NavigatorCapabilityRenameFile:     true,
+		NavigatorCapabilityUploadFile:     true,
+		NavigatorCapabilityDeleteFile:     true,
+		NavigatorCapabilitySoftDelete:     true,
+		NavigatorCapabilityUpdateMetadata: true,
+	}, shareEditableNavigatorCapability)
 	boolset.Sets(map[NavigatorCapability]bool{
 		NavigatorCapabilityListChildren: true,
 		NavigatorCapabilityDeleteFile:   true,

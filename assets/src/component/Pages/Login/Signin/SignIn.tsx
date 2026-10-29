@@ -1,6 +1,6 @@
 import { ArrowBackIos } from "@mui/icons-material";
 import { LoadingButton } from "@mui/lab";
-import { Box, Button, Typography } from "@mui/material";
+import { Box, Button, Divider, Stack, Typography } from "@mui/material";
 import { enqueueSnackbar } from "notistack";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -14,7 +14,7 @@ import {
   sendPrepareLogin,
   sendResetEmail,
 } from "../../../../api/api.ts";
-import { AppError, Code } from "../../../../api/request.ts";
+import { ApiPrefix, AppError, Code } from "../../../../api/request.ts";
 import { AppRegistration, GrantService, LoginResponse, PrepareLoginResponse } from "../../../../api/user.ts";
 import { clearOAuthApp, setOAuthApp, setOAuthAppLoading } from "../../../../redux/globalStateSlice.ts";
 import { useAppDispatch, useAppSelector } from "../../../../redux/hooks.ts";
@@ -35,6 +35,14 @@ import "../SideTransition.css";
 
 // Local storage key for OAuth redirect
 export const OAUTH_REDIRECT_KEY = "oauth_redirect_url";
+
+// decodeBase64Url decodes a base64url payload (without padding) to text.
+const decodeBase64Url = (encoded: string): string => {
+  const b64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = b64.length % 4 === 0 ? "" : "=".repeat(4 - (b64.length % 4));
+  const bytes = Uint8Array.from(atob(b64 + pad), (ch) => ch.charCodeAt(0));
+  return new TextDecoder("utf-8").decode(bytes);
+};
 
 enum EmailLoginPhase {
   CollectEmail,
@@ -96,6 +104,11 @@ const EmailLogin = ({ oauthConsent }: SignInProps) => {
   const captchaState = useRef<CaptchaParams>();
   const twoFaSession = useRef<string>("");
   const [loginOptions, setLoginOptions] = useState<PrepareLoginResponse>();
+  // Global sign-in options (SSO flags), fetched before an email is entered.
+  const [ssoOptions, setSsoOptions] = useState<PrepareLoginResponse>();
+  // Marks that the current page load is the return leg of an SSO flow, so
+  // direct sign-in does not bounce the user straight back to the provider.
+  const ssoReturned = useRef(false);
 
   // OAuth-specific state
   const [oauthError, setOauthError] = useState<string | null>(null);
@@ -322,6 +335,68 @@ const EmailLogin = ({ oauthConsent }: SignInProps) => {
     };
   }, []);
 
+  // Load global sign-in options and consume SSO flow results carried in the
+  // URL fragment (the fragment is never sent to servers, so the issued
+  // credential stays out of server logs).
+  useEffect(() => {
+    dispatch(sendPrepareLogin()).then((opts) => setSsoOptions(opts)).catch(() => {});
+
+    const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
+    if (!hash) {
+      return;
+    }
+    const params = new URLSearchParams(hash);
+    const credential = params.get("sso_credential");
+    const ssoError = params.get("sso_error");
+    const sso2FA = params.get("sso_2fa");
+    if (!credential && !ssoError && !sso2FA) {
+      return;
+    }
+    ssoReturned.current = true;
+    // Clear the fragment so a refresh does not replay the result.
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+
+    if (credential) {
+      try {
+        const loginRes = JSON.parse(decodeBase64Url(credential)) as LoginResponse;
+        if (isOAuthFlow) {
+          handleOAuthSessionSwitch(loginRes);
+        } else {
+          dispatch(refreshUserSession(loginRes, query.get("redirect")));
+        }
+      } catch (e) {
+        enqueueSnackbar({
+          message: t("login.ssoLoginFailed"),
+          variant: "error",
+          action: DefaultCloseAction,
+        });
+      }
+      return;
+    }
+    if (sso2FA) {
+      twoFaSession.current = sso2FA;
+      setPhase(EmailLoginPhase.Collect2FA);
+      return;
+    }
+    enqueueSnackbar({
+      message: t("login.ssoLoginFailedWith", { msg: ssoError }),
+      variant: "error",
+      action: DefaultCloseAction,
+    });
+  }, []);
+
+  // Direct sign-in: bounce straight to the identity provider when enabled.
+  useEffect(() => {
+    if (!ssoOptions?.sso_enabled || !ssoOptions?.sso_direct_sign_in) {
+      return;
+    }
+    if (ssoReturned.current) {
+      return;
+    }
+    const ssoReturn = query.get("redirect");
+      window.location.href = `${ApiPrefix}/session/sso/oidc/redirect${ssoReturn ? `?return=${encodeURIComponent(ssoReturn)}` : ""}`;
+  }, [ssoOptions]);
+
   const handleScopeToggle = useCallback((scope: string) => {
     setSelectedScopes((prev) => (prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope]));
   }, []);
@@ -502,6 +577,43 @@ const EmailLogin = ({ oauthConsent }: SignInProps) => {
           </CSSTransition>
         </SwitchTransition>
       </Box>
+      {phase === EmailLoginPhase.CollectEmail && (ssoOptions?.sso_enabled || ssoOptions?.qq_enabled) && (
+        <Box sx={{ mt: 2 }}>
+          <Divider sx={{ my: 2 }} role="presentation">
+            <Typography variant="body2" color={"text.secondary"}>
+              {t("login.or")}
+            </Typography>
+          </Divider>
+          <Stack spacing={1}>
+            {ssoOptions?.sso_enabled && (
+              <Button
+                fullWidth
+                variant="outlined"
+                color="primary"
+                onClick={() => {
+                  const ssoReturn = query.get("redirect");
+      window.location.href = `${ApiPrefix}/session/sso/oidc/redirect${ssoReturn ? `?return=${encodeURIComponent(ssoReturn)}` : ""}`;
+                }}
+              >
+                {t("login.signInWithSSO")}
+              </Button>
+            )}
+            {ssoOptions?.qq_enabled && (
+              <Button
+                fullWidth
+                variant="outlined"
+                color="primary"
+                onClick={() => {
+                  const qqReturn = query.get("redirect");
+      window.location.href = `${ApiPrefix}/session/sso/qq/redirect${qqReturn ? `?return=${encodeURIComponent(qqReturn)}` : ""}`;
+                }}
+              >
+                {t("login.signInWithQQ")}
+              </Button>
+            )}
+          </Stack>
+        </Box>
+      )}
     </Box>
   );
 };

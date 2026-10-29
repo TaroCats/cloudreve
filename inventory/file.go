@@ -90,6 +90,9 @@ type (
 		EntityType      *types.EntityType
 		UserID          int
 		StoragePolicyID int
+		// IDAfter restricts results to entities with ID greater than this
+		// value; used as a resumable migration checkpoint.
+		IDAfter int
 	}
 
 	ListEntityResult struct {
@@ -1254,6 +1257,10 @@ func (f *fileClient) ListEntities(ctx context.Context, args *ListEntityParameter
 
 	if args.StoragePolicyID > 0 {
 		query = query.Where(entity.StoragePolicyEntities(args.StoragePolicyID))
+	}
+
+	if args.IDAfter > 0 {
+		query = query.Where(entity.IDGT(args.IDAfter))
 	}
 
 	query.Order(getEntityOrderOption(args)...)

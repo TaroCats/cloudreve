@@ -30,6 +30,7 @@ export function createOrUpdateShareLink(
       password: setting.password,
       share_view: setting.share_view,
       show_readme: setting.show_readme,
+      editable: setting.editable,
       downloads: setting.downloads && setting.downloads_val.value > 0 ? setting.downloads_val.value : undefined,
       expire: setting.expires && setting.expires_val.value > 0 ? setting.expires_val.value : undefined,
     };

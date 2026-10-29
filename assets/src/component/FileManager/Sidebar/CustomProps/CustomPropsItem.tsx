@@ -99,6 +99,10 @@ export const getPropsContent = (
       return (
         <LinkPropsContent prop={prop} onChange={onChange} loading={loading} readOnly={readOnly} fullSize={fullSize} />
       );
+    case CustomPropsType.user:
+      return (
+        <UserPropsContent prop={prop} onChange={onChange} loading={loading} readOnly={readOnly} fullSize={fullSize} />
+      );
     default:
       return null;
   }

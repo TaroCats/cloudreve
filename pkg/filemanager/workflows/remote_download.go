@@ -82,12 +82,12 @@ func init() {
 }
 
 // NewRemoteDownloadTask creates a new RemoteDownloadTask
-func NewRemoteDownloadTask(ctx context.Context, src string, srcFile, dst string) (queue.Task, error) {
+func NewRemoteDownloadTask(ctx context.Context, src string, srcFile, dst string, nodeID int) (queue.Task, error) {
 	state := &RemoteDownloadTaskState{
 		SrcUri:     src,
 		SrcFileUri: srcFile,
 		Dst:        dst,
-		NodeState:  NodeState{},
+		NodeState:  NodeState{NodeID: nodeID},
 	}
 	stateBytes, err := json.Marshal(state)
 	if err != nil {
@@ -128,7 +128,7 @@ func (m *RemoteDownloadTask) Do(ctx context.Context) (task.Status, error) {
 	m.state = state
 
 	// select node
-	node, err := allocateNode(ctx, dep, &m.state.NodeState, types.NodeCapabilityRemoteDownload)
+	node, err := allocateNode(ctx, dep, &m.state.NodeState, types.NodeCapabilityRemoteDownload, m.Owner())
 	if err != nil {
 		return task.StatusError, fmt.Errorf("failed to allocate node: %w", err)
 	}

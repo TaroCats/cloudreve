@@ -1,6 +1,7 @@
 import { ListItemIcon, ListItemText } from "@mui/material";
 import { useCallback, useContext, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { GroupPermission } from "../../../api/user.ts";
 import { closeContextMenu } from "../../../redux/fileManagerSlice.ts";
 import {
   setCreateArchiveDialog,
@@ -10,6 +11,8 @@ import {
 } from "../../../redux/globalStateSlice.ts";
 import { useAppDispatch } from "../../../redux/hooks.ts";
 import { resetThumbnails } from "../../../redux/thunks/file.ts";
+import SessionManager from "../../../session";
+import { GroupBS } from "../../../session/utils.ts";
 import Archive from "../../Icons/Archive.tsx";
 import ArrowSync from "../../Icons/ArrowSync.tsx";
 import BranchForkLink from "../../Icons/BranchForkLink.tsx";
@@ -19,6 +22,7 @@ import LinkSetting from "../../Icons/LinkSetting.tsx";
 import { FileType } from "../../../api/explorer.ts";
 import BindPolicyDialog from "./BindPolicyDialog.tsx";
 import { CascadingContext, CascadingMenuItem } from "./CascadingMenu.tsx";
+import MigratePolicyDialog from "./MigratePolicyDialog.tsx";
 import { SubMenuItemsProps } from "./OrganizeMenuItems.tsx";
 
 const MoreMenuItems = ({ displayOpt, targets }: SubMenuItemsProps) => {
@@ -26,8 +30,10 @@ const MoreMenuItems = ({ displayOpt, targets }: SubMenuItemsProps) => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const [bindPolicyOpen, setBindPolicyOpen] = useState(false);
+  const [migratePolicyOpen, setMigratePolicyOpen] = useState(false);
   // Binding is per-folder and only meaningful on a single selected folder.
   const canBindPolicy = targets.length === 1 && targets[0].type === FileType.folder;
+  const canMigratePolicy = GroupBS(SessionManager.currentLoginOrNull()?.user).enabled(GroupPermission.migrate_policy);
   const onClick = useCallback(
     (f: () => any) => () => {
       f();
@@ -129,9 +135,18 @@ const MoreMenuItems = ({ displayOpt, targets }: SubMenuItemsProps) => {
           <ListItemText>{t("dashboard:group.bindPolicy")}</ListItemText>
         </CascadingMenuItem>
       )}
+      {canMigratePolicy && (
+        <CascadingMenuItem onClick={onClick(() => setMigratePolicyOpen(true))}>
+          <ListItemIcon>
+            <ArrowSync fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>{t("dashboard:group.migratePolicy")}</ListItemText>
+        </CascadingMenuItem>
+      )}
       {canBindPolicy && (
         <BindPolicyDialog open={bindPolicyOpen} file={targets[0]} onClose={() => setBindPolicyOpen(false)} />
       )}
+      {canMigratePolicy && <MigratePolicyDialog open={migratePolicyOpen} onClose={() => setMigratePolicyOpen(false)} />}
     </>
   );
 };

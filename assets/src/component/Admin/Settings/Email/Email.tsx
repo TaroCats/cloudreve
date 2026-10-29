@@ -196,6 +196,23 @@ const Email = () => {
         </SettingSection>
 
         {/* Email Templates Section */}
+        <SettingSection>
+          <Typography variant="h6" gutterBottom>
+            {t("settings.quotaNotify")}
+          </Typography>
+          <SettingSectionContent>
+            <SettingForm title={t("settings.cronQuotaNotify")} lgWidth={5}>
+              <FormControl fullWidth>
+                <DenseFilledTextField
+                  value={values.cron_quota_notify ?? ""}
+                  onChange={(e) => setSettings({ cron_quota_notify: e.target.value })}
+                  placeholder="@every 24h"
+                />
+                <NoMarginHelperText>{t("settings.cronQuotaNotifyDes")}</NoMarginHelperText>
+              </FormControl>
+            </SettingForm>
+          </SettingSectionContent>
+        </SettingSection>
         <EmailTemplates />
       </Stack>
     </Box>

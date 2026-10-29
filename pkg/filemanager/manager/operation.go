@@ -14,6 +14,7 @@ import (
 	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
 	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs/dbfs"
 	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/lock"
+	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
 	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
 	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
 	"github.com/cloudreve/Cloudreve/v4/pkg/util"
@@ -99,7 +100,27 @@ func (m *manager) SharedAddressTranslation(ctx context.Context, path *fs.URI, op
 	return m.fs.SharedAddressTranslation(ctx, path)
 }
 
+
+// ctxForShareWrite wraps ctx with the owner-check bypass when a target URI
+// addresses an editable share. Non-editable shares never reach the bypass
+// (the share navigator denies write capabilities first), so this is safe.
+func (m *manager) ctxForShareWrite(ctx context.Context, uris ...*fs.URI) context.Context {
+	for _, u := range uris {
+		if u == nil || u.FileSystem() != constants.FileSystemShare {
+			continue
+		}
+		shareClient := m.dep.ShareClient()
+		loadCtx := context.WithValue(ctx, inventory.LoadShareUser{}, true)
+		share, err := shareClient.GetByHashID(loadCtx, u.ID(hashid.EncodeUserID(m.hasher, m.user.ID)))
+		if err == nil && share.Props != nil && share.Props.Editable {
+			return dbfs.WithBypassOwnerCheck(ctx)
+		}
+	}
+	return ctx
+}
+
 func (m *manager) Create(ctx context.Context, path *fs.URI, fileType types.FileType, opts ...fs.Option) (fs.File, error) {
+	ctx = m.ctxForShareWrite(ctx, path)
 	o := newOption()
 	for _, opt := range opts {
 		opt.Apply(o)
@@ -138,12 +159,14 @@ func (m *manager) Create(ctx context.Context, path *fs.URI, fileType types.FileT
 }
 
 func (m *manager) Rename(ctx context.Context, path *fs.URI, newName string) (fs.File, error) {
+	ctx = m.ctxForShareWrite(ctx, path)
 	file, indexDiff, err := m.fs.Rename(ctx, path, newName)
 	m.processIndexDiff(ctx, indexDiff)
 	return file, err
 }
 
 func (m *manager) MoveOrCopy(ctx context.Context, src []*fs.URI, dst *fs.URI, isCopy bool) error {
+	ctx = m.ctxForShareWrite(ctx, append(append([]*fs.URI{}, src...), dst)...)
 	indexDiff, err := m.fs.MoveOrCopy(ctx, src, dst, isCopy)
 	if err != nil {
 		return err
@@ -154,6 +177,7 @@ func (m *manager) MoveOrCopy(ctx context.Context, src []*fs.URI, dst *fs.URI, is
 }
 
 func (m *manager) SoftDelete(ctx context.Context, path ...*fs.URI) error {
+	ctx = m.ctxForShareWrite(ctx, path...)
 	return m.fs.SoftDelete(ctx, path...)
 }
 
@@ -324,6 +348,7 @@ func (l *manager) CreateOrUpdateShare(ctx context.Context, path *fs.URI, args *C
 	props := &types.ShareProps{
 		ShareView:  args.ShareView,
 		ShowReadMe: args.ShowReadMe,
+		Editable:   args.Editable,
 	}
 
 	share, err := shareClient.Upsert(ctx, &inventory.CreateShareParams{

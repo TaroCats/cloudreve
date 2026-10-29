@@ -20,6 +20,10 @@
     "captcha": "CAPTCHA",
     "captchaError": "Cannot load CAPTCHA: ",
     "signIn": "Sign in",
+    "signInWithSSO": "Sign in with SSO",
+    "signInWithQQ": "Sign in with QQ",
+    "ssoLoginFailed": "Third-party sign-in failed",
+    "ssoLoginFailedWith": "Third-party sign-in failed: {{msg}}",
     "signUp": "Sign up",
     "signUpAccount": "Sign up",
     "useFIDO2": "Use Passkey",
@@ -301,6 +305,7 @@
     "activity": "Activity",
     "goToSharedLink": "Go to shared link",
     "saveShortcut": "Save share link as shortcut",
+    "reportShare": "Report abuse",
     "customizeIcon": "Customize icon",
     "tags": "Tags",
     "apply": "Apply",
@@ -453,7 +458,11 @@
     "noEncryption": "Not encrypted",
     "ftsStatus": "Full-text index",
     "ftsIndexed": "Indexed",
-    "ftsNotIndexed": "Not indexed"
+    "ftsNotIndexed": "Not indexed",
+    "migratePolicyUserDes": "Move your own files from the source storage policy to the target policy. The task runs in the background; track progress in the task queue.",
+    "migratePolicySrc": "Source policy",
+    "taskNode": "Processing node",
+    "taskNodeAuto": "Auto assign"
   },
   "modals": {
     "includePasswordInShareLink": "Include password in share link",
@@ -473,6 +482,10 @@
     "discardUnsavedConfirm": "You have unsaved changes. Still discard?",
     "overwrite": "Overwrite",
     "editShareLink": "Edit share link",
+    "reportShare": "Report share",
+    "reportShareReason": "Reason",
+    "reportShareReasonPlaceholder": "Describe the reason (max 1000 characters)",
+    "reportShareSuccess": "Report submitted. Thank you for your feedback.",
     "clearPermissions": "Clear permission settings",
     "shortcutCreated": "Shortcut created.",
     "createShortcut": "Create shortcut",
@@ -611,7 +624,9 @@
     "viewSetting": "View setting",
     "saved": "Saved",
     "notSet": "Not set",
-    "deleteViewSetting": "Delete view setting"
+    "deleteViewSetting": "Delete view setting",
+    "shareEditable": "Allow anonymous editing",
+    "shareEditableDes": "When enabled, anonymous visitors with the share link can create, modify and delete files under the shared folder (collaboration mode). Read-only otherwise."
   },
   "uploader": {
     "fileCopyName": "Copy of ",
@@ -991,8 +1006,17 @@
     "validDurationDays": "{{num}} days",
     "reportTarget": "Report target",
     "reportReason": "Reason",
-    "reportReasonOptions": ["Copyright infringement", "Harmful content", "Spam", "Other"],
+    "reportReasonOptions": [
+      "Copyright infringement",
+      "Harmful content",
+      "Spam",
+      "Other"
+    ],
     "reportDescription": "Additional description",
     "reportAbuseSuccess": "Report submitted."
+  },
+  "announcement": {
+    "title": "Announcement",
+    "gotIt": "Got it"
   }
 }

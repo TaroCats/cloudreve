@@ -80,6 +80,30 @@ func (m *manager) GetDirectLink(ctx context.Context, urls ...*fs.URI) ([]DirectL
 			continue
 		}
 
+		if file.Type() == types.FileTypeFolder {
+			// Folder direct links are gated by the group permission and are
+			// always served through the redirect endpoint, which resolves
+			// paths under the folder on demand.
+			if !m.user.Edges.Group.Permissions.Enabled(int(types.GroupPermissionFolderDirectLink)) {
+				ae.Add(url.String(), fs.ErrEntityNotExist)
+				continue
+			}
+
+			reuseExisting := !m.user.Edges.Group.Permissions.Enabled(int(types.GroupPermissionUniqueRedirectDirectLink))
+			link, err := fileClient.CreateDirectLink(ctx, file.ID(), file.Name(), m.user.Edges.Group.SpeedLimit, reuseExisting)
+			if err != nil {
+				ae.Add(url.String(), err)
+				continue
+			}
+
+			linkHashID := hashid.EncodeSourceLinkID(m.hasher, link.ID)
+			res = append(res, DirectLink{
+				File: file,
+				Url:  routes.MasterDirectLink(siteUrl, linkHashID, link.Name).String(),
+			})
+			continue
+		}
+
 		if file.Type() != types.FileTypeFile {
 			ae.Add(url.String(), fs.ErrEntityNotExist)
 			continue

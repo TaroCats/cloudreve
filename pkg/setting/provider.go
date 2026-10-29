@@ -56,6 +56,9 @@ type (
 		ActivationEmailTemplate(ctx context.Context) []EmailTemplate
 		// ResetEmailTemplate returns the email template for reset password.
 		ResetEmailTemplate(ctx context.Context) []EmailTemplate
+		// QuotaExceededEmailTemplate returns the email template for quota
+		// exceeded notifications.
+		QuotaExceededEmailTemplate(ctx context.Context) []EmailTemplate
 		// TokenAuth returns token based auth related settings.
 		TokenAuth(ctx context.Context) *TokenAuth
 		// HashIDSalt returns the salt used for hash ID generation.
@@ -220,6 +223,11 @@ type (
 		EventHubMaxOfflineDuration(ctx context.Context) time.Duration
 		// EventHubEnabled returns true if event hub is enabled.
 		EventHubEnabled(ctx context.Context) bool
+		// AuditLogEnabled returns true if audit logging is enabled.
+		AuditLogEnabled(ctx context.Context) bool
+		// AuditLogTypes returns the audit event types to record. An empty
+		// list means all types are recorded.
+		AuditLogTypes(ctx context.Context) []int
 		// EventHubDebounceDelay returns the debounce delay of event hub.
 		EventHubDebounceDelay(ctx context.Context) time.Duration
 		// FTSEnabled returns true if full-text search is enabled.
@@ -239,6 +247,19 @@ type (
 		// ExposeUserEmail returns true if user email should be exposed to other
 		// signed-in users in redacted responses.
 		ExposeUserEmail(ctx context.Context) bool
+		// DisableSubAddressEmail returns true if plus-addressed (sub-address)
+		// emails are rejected at registration and email change.
+		DisableSubAddressEmail(ctx context.Context) bool
+		// EmailDomainFilter returns the email domain allow/deny filter for
+		// registration.
+		EmailDomainFilter(ctx context.Context) *EmailDomainFilter
+		// Announcement returns the site announcement shown to signed-in users.
+		Announcement(ctx context.Context) string
+		// DefaultSymbolics returns share IDs shortcutted into new users' root
+		// folders.
+		DefaultSymbolics(ctx context.Context) []int
+		// SSO returns third-party sign-in provider settings.
+		SSO(ctx context.Context) *SSOSetting
 	}
 	UseFirstSiteUrlCtxKey = struct{}
 )
@@ -313,6 +334,61 @@ func (s *settingProvider) CustomProps(ctx context.Context) []types.CustomProps {
 
 func (s *settingProvider) License(ctx context.Context) string {
 	return s.getString(ctx, "license", "")
+}
+
+func (s *settingProvider) DisableSubAddressEmail(ctx context.Context) bool {
+	return s.getBoolean(ctx, "disable_sub_address_email", false)
+}
+
+func (s *settingProvider) EmailDomainFilter(ctx context.Context) *EmailDomainFilter {
+	mode := EmailDomainFilterMode(s.getInt(ctx, "email_domain_filter_mode", int(EmailDomainFilterDisabled)))
+	if mode < EmailDomainFilterDisabled || mode > EmailDomainFilterBlacklist {
+		mode = EmailDomainFilterDisabled
+	}
+	domains := s.getStringList(ctx, "email_domain_filter_list", []string{})
+	return &EmailDomainFilter{
+		Mode:    mode,
+		Domains: domains,
+	}
+}
+
+func (s *settingProvider) Announcement(ctx context.Context) string {
+	return s.getString(ctx, "announcement", "")
+}
+
+func (s *settingProvider) DefaultSymbolics(ctx context.Context) []int {
+	raw := s.getString(ctx, "default_symbolics", "[]")
+	var ids []int
+	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
+		return []int{}
+	}
+	return ids
+}
+
+func (s *settingProvider) AuditLogEnabled(ctx context.Context) bool {
+	return s.getBoolean(ctx, "audit_log_enabled", false)
+}
+
+func (s *settingProvider) AuditLogTypes(ctx context.Context) []int {
+	raw := s.getString(ctx, "audit_log_types", "[]")
+	var eventTypes []int
+	if err := json.Unmarshal([]byte(raw), &eventTypes); err != nil {
+		return []int{}
+	}
+	return eventTypes
+}
+
+func (s *settingProvider) SSO(ctx context.Context) *SSOSetting {
+	return &SSOSetting{
+		OIDCEnabled:      s.getBoolean(ctx, "oidc_enabled", false),
+		OIDCIssuer:       s.getString(ctx, "oidc_issuer", ""),
+		OIDCClientID:     s.getString(ctx, "oidc_client_id", ""),
+		OIDCClientSecret: s.getString(ctx, "oidc_client_secret", ""),
+		OIDCDirectSignIn: s.getBoolean(ctx, "oidc_direct_sign_in", false),
+		QQEnabled:        s.getBoolean(ctx, "qq_enabled", false),
+		QQAppID:          s.getString(ctx, "qq_app_id", ""),
+		QQAppSecret:      s.getString(ctx, "qq_app_secret", ""),
+	}
 }
 
 func (s *settingProvider) AvatarProcess(ctx context.Context) *AvatarProcess {
@@ -718,6 +794,16 @@ func (s *settingProvider) TokenAuth(ctx context.Context) *TokenAuth {
 
 func (s *settingProvider) ResetEmailTemplate(ctx context.Context) []EmailTemplate {
 	src := s.getString(ctx, "mail_reset_template", "[]")
+	var templates []EmailTemplate
+	if err := json.Unmarshal([]byte(src), &templates); err != nil {
+		return []EmailTemplate{}
+	}
+
+	return templates
+}
+
+func (s *settingProvider) QuotaExceededEmailTemplate(ctx context.Context) []EmailTemplate {
+	src := s.getString(ctx, "mail_exceed_quota_template", "[]")
 	var templates []EmailTemplate
 	if err := json.Unmarshal([]byte(src), &templates); err != nil {
 		return []EmailTemplate{}

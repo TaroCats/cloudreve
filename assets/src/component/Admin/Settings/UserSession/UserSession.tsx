@@ -6,7 +6,7 @@ import { isTrueVal } from "../../../../session/utils.ts";
 import SizeInput from "../../../Common/SizeInput.tsx";
 import { DenseFilledTextField, DenseSelect } from "../../../Common/StyledComponents.tsx";
 import { SquareMenuItem } from "../../../FileManager/ContextMenu/ContextMenu.tsx";
-import SettingForm, { ProChip } from "../../../Pages/Setting/SettingForm.tsx";
+import SettingForm from "../../../Pages/Setting/SettingForm.tsx";
 import { Code } from "../../../Common/Code.tsx";
 import GroupSelectionInput from "../../Common/GroupSelectionInput.tsx";
 import SharesInput from "../../Common/SharesInput.tsx";
@@ -25,7 +25,7 @@ const UserSession = () => {
     } catch (e) {
       console.error(e);
     }
-    return result;
+    return result.map((id) => ({ id }));
   }, [values?.default_symbolics]);
 
   return (
@@ -127,9 +127,16 @@ const UserSession = () => {
                 <NoMarginHelperText>{t("settings.defaultGroupDes")}</NoMarginHelperText>
               </FormControl>
             </SettingForm>
-            <SettingForm title={t("settings.defaultSymbolics")} lgWidth={5} pro>
+            <SettingForm title={t("settings.defaultSymbolics")} lgWidth={5}>
               <FormControl>
-                <SharesInput />
+                <SharesInput
+                  value={defaultSymbolics}
+                  onChange={(opts) =>
+                    setSettings({
+                      default_symbolics: JSON.stringify(opts.map((o) => o.id)),
+                    })
+                  }
+                />
                 <NoMarginHelperText>
                   <Trans
                     i18nKey="settings.defaultSymbolicsDes"
@@ -139,12 +146,19 @@ const UserSession = () => {
                 </NoMarginHelperText>
               </FormControl>
             </SettingForm>
-            <SettingForm title={t("vas.filterEmailProvider")} lgWidth={5} pro>
+            <SettingForm title={t("vas.filterEmailProvider")} lgWidth={5}>
               <FormControl>
-                <DenseSelect value={0}>
+                <DenseSelect
+                  value={values.email_domain_filter_mode ?? "0"}
+                  onChange={(e) =>
+                    setSettings({
+                      email_domain_filter_mode: e.target.value as string,
+                    })
+                  }
+                >
                   {["filterEmailProviderDisabled", "filterEmailProviderWhitelist", "filterEmailProviderBlacklist"].map(
                     (v, i) => (
-                      <SquareMenuItem value={i.toString()}>
+                      <SquareMenuItem value={i.toString()} key={v}>
                         <ListItemText
                           slotProps={{
                             primary: { variant: "body2" },
@@ -159,31 +173,39 @@ const UserSession = () => {
                 <NoMarginHelperText>{t("vas.filterEmailProviderDes")}</NoMarginHelperText>
               </FormControl>
             </SettingForm>
-            <SettingForm lgWidth={5} pro>
+            <SettingForm lgWidth={5}>
+              <FormControl fullWidth>
+                <DenseFilledTextField
+                  value={values.email_domain_filter_list ?? ""}
+                  onChange={(e) =>
+                    setSettings({
+                      email_domain_filter_list: e.target.value,
+                    })
+                  }
+                  placeholder={"example.com, another.org"}
+                />
+                <NoMarginHelperText>{t("vas.filterEmailProviderListDes")}</NoMarginHelperText>
+              </FormControl>
+            </SettingForm>
+            <SettingForm lgWidth={5}>
               <FormControl fullWidth>
                 <FormControlLabel
-                  control={<Switch checked={false} />}
-                  label={
-                    <>
-                      {t("vas.disableSubAddressEmail")}
-                      <ProChip label="Pro" color="primary" size="small" />
-                    </>
+                  control={
+                    <Switch
+                      checked={isTrueVal(values.disable_sub_address_email)}
+                      onChange={(e) =>
+                        setSettings({
+                          disable_sub_address_email: e.target.checked ? "1" : "0",
+                        })
+                      }
+                    />
                   }
+                  label={t("vas.disableSubAddressEmail")}
                 />
                 <NoMarginHelperText>
                   <Trans i18nKey="vas.disableSubAddressEmailDes" ns={"dashboard"} components={[<Code />]} />
                 </NoMarginHelperText>
               </FormControl>
-            </SettingForm>
-          </SettingSectionContent>
-        </SettingSection>
-        <SettingSection>
-          <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center" }}>
-            {t("settings.thirdPartySignIn")} <ProChip label="Pro" color="primary" size="small" />
-          </Typography>
-          <SettingSectionContent>
-            <SettingForm lgWidth={5}>
-              <SSOSettings />
             </SettingForm>
           </SettingSectionContent>
         </SettingSection>
@@ -254,6 +276,7 @@ const UserSession = () => {
             </SettingForm>
           </SettingSectionContent>
         </SettingSection>
+        <SSOSettings />
       </Stack>
     </Box>
   );

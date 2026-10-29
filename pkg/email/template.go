@@ -178,3 +178,52 @@ func selectTemplate(templates []setting.EmailTemplate, u *ent.User) setting.Emai
 
 	return selected
 }
+
+// QuotaExceededContext used for variables in quota exceeded email
+type QuotaExceededContext struct {
+	*CommonContext
+	User *ent.User
+}
+
+// NewQuotaExceededEmail generates a quota exceeded notification from template
+func NewQuotaExceededEmail(ctx context.Context, settings setting.Provider, user *ent.User) (string, string, error) {
+	templates := settings.QuotaExceededEmailTemplate(ctx)
+	if len(templates) == 0 {
+		return "", "", fmt.Errorf("quota exceeded email template not configured")
+	}
+
+	selected := selectTemplate(templates, user)
+	mailCtx := QuotaExceededContext{
+		CommonContext: commonContext(ctx, settings),
+		User:          user,
+	}
+
+	tmplTitle, err := template.New("quotaTitle").Parse(selected.Title)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to parse email title: %w", err)
+	}
+
+	var resTitle strings.Builder
+	if err := tmplTitle.Execute(&resTitle, mailCtx.templateData()); err != nil {
+		return "", "", fmt.Errorf("failed to execute email title: %w", err)
+	}
+
+	tmplBody, err := template.New("quotaBody").Parse(selected.Body)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to parse email template: %w", err)
+	}
+
+	var resBody strings.Builder
+	if err := tmplBody.Execute(&resBody, mailCtx.templateData()); err != nil {
+		return "", "", fmt.Errorf("failed to execute email template: %w", err)
+	}
+
+	return resTitle.String(), resBody.String(), nil
+}
+
+func (c QuotaExceededContext) templateData() map[string]any {
+	return map[string]any{
+		"CommonContext": c.CommonContext,
+		"User":          c.User,
+	}
+}

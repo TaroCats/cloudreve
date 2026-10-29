@@ -18,8 +18,25 @@ type ListShareResponse struct {
 
 type GetShareResponse struct {
 	*ent.Share
-	UserHashID string `json:"user_hash_id,omitempty"`
-	ShareLink  string `json:"share_link,omitempty"`
+	UserHashID  string `json:"user_hash_id,omitempty"`
+	ShareHashID string `json:"share_hash_id,omitempty"`
+	ShareLink   string `json:"share_link,omitempty"`
+}
+
+type ListAbuseReportResponse struct {
+	Pagination *inventory.PaginationResults `json:"pagination"`
+	Reports    []GetAbuseReportResponse     `json:"reports"`
+}
+
+type GetAbuseReportResponse struct {
+	*ent.AbuseReport
+	ShareHashID    string `json:"share_hash_id,omitempty"`
+	ShareLink      string `json:"share_link,omitempty"`
+	FileName       string `json:"file_name,omitempty"`
+	OwnerHashID    string `json:"owner_hash_id,omitempty"`
+	OwnerName      string `json:"owner_name,omitempty"`
+	ReporterHashID string `json:"reporter_hash_id,omitempty"`
+	ReporterName   string `json:"reporter_name,omitempty"`
 }
 
 type ListTaskResponse struct {

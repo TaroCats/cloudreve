@@ -11,6 +11,7 @@ import (
 	"github.com/cloudreve/Cloudreve/v4/inventory/types"
 	"github.com/cloudreve/Cloudreve/v4/pkg/auth"
 	"github.com/cloudreve/Cloudreve/v4/pkg/boolset"
+	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
 	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
@@ -142,7 +143,10 @@ type WebAuthnCredentials struct {
 
 type PrepareLoginResponse struct {
 	WebAuthnEnabled bool `json:"webauthn_enabled"`
+	SSOEnabled      bool `json:"sso_enabled"`
 	PasswordEnabled bool `json:"password_enabled"`
+	QQEnabled       bool `json:"qq_enabled"`
+	SSODirectSignIn bool `json:"sso_direct_sign_in"`
 }
 
 // BuildWebAuthnList 构建设置页面凭证列表
@@ -161,6 +165,24 @@ func BuildWebAuthnList(credentials []webauthn.Credential) []WebAuthnCredentials 
 
 // BuildUser 序列化用户
 func BuildUser(user *ent.User, idEncoder hashid.Encoder) User {
+	// Group default pins are force-pinned sidebar shortcuts; users cannot
+	// unpin them, so they are prepended with the fixed flag set.
+	var pined []types.PinedFile
+	if user.Edges.Group != nil && len(user.Edges.Group.Settings.DefaultPinned) > 0 {
+		pined = make([]types.PinedFile, 0, len(user.Edges.Group.Settings.DefaultPinned)+len(user.Settings.Pined))
+		for _, p := range user.Edges.Group.Settings.DefaultPinned {
+			if p.ShareID <= 0 {
+				continue
+			}
+			pined = append(pined, types.PinedFile{
+				Uri:   fs.NewShareUri(hashid.EncodeShareID(idEncoder, p.ShareID), ""),
+				Name:  p.Name,
+				Fixed: true,
+			})
+		}
+	}
+	pined = append(pined, user.Settings.Pined...)
+
 	return User{
 		ID:                  hashid.EncodeUserID(idEncoder, user.ID),
 		Email:               user.Email,
@@ -171,7 +193,7 @@ func BuildUser(user *ent.User, idEncoder hashid.Encoder) User {
 		PreferredTheme:      user.Settings.PreferredTheme,
 		Anonymous:           user.ID == 0,
 		Group:               BuildGroup(user.Edges.Group, idEncoder),
-		Pined:               user.Settings.Pined,
+		Pined:               pined,
 		Language:            user.Settings.Language,
 		DisableViewSync:     user.Settings.DisableViewSync,
 		ShareLinksInProfile: user.Settings.ShareLinksInProfile,

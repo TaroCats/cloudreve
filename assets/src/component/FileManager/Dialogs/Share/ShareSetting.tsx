@@ -20,6 +20,9 @@ import MuiAccordionSummary from "@mui/material/AccordionSummary";
 import { useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { FileResponse, FileType } from "../../../../api/explorer.ts";
+import { GroupPermission } from "../../../../api/user.ts";
+import SessionManager from "../../../../session";
+import { GroupBS } from "../../../../session/utils.ts";
 import { Code } from "../../../Common/Code.tsx";
 import { FilledTextField, SmallFormControlLabel } from "../../../Common/StyledComponents.tsx";
 import BookInformation from "../../../Icons/BookInformation.tsx";
@@ -79,6 +82,7 @@ export interface ShareSetting {
   password?: string;
   share_view?: boolean;
   show_readme?: boolean;
+  editable?: boolean;
   downloads?: boolean;
   expires?: boolean;
 
@@ -127,12 +131,15 @@ const ShareSettingContent = ({ setting, file, editing, onSettingChange }: ShareS
   const { t } = useTranslation();
 
   const [expanded, setExpanded] = useState<string | undefined>(undefined);
+  const canEscalateAnonymity = GroupBS(SessionManager.currentLoginOrNull()?.user).enabled(
+    GroupPermission.escalate_anonymity,
+  );
 
   const handleExpand = (panel: string) => (_event: any, isExpanded: boolean) => {
     setExpanded(isExpanded ? panel : undefined);
   };
 
-  const handleCheck = (prop: "is_private" | "share_view" | "show_readme" | "expires" | "downloads") => () => {
+  const handleCheck = (prop: "is_private" | "share_view" | "show_readme" | "editable" | "expires" | "downloads") => () => {
     if (!setting[prop]) {
       handleExpand(prop)(null, true);
     }
@@ -232,6 +239,22 @@ const ShareSettingContent = ({ setting, file, editing, onSettingChange }: ShareS
               <Trans i18nKey="application:modals.showReadmeDes" components={[<Code />]} />
             </AccordionDetails>
           </Accordion>
+          {canEscalateAnonymity && (
+            <Accordion expanded={expanded === "editable"} onChange={handleExpand("editable")}>
+              <AccordionSummary aria-controls="panel-editable-content" id="panel-editable-header">
+                <StyledListItemButton>
+                  <ListItemIcon>
+                    <TableSettingsOutlined />
+                  </ListItemIcon>
+                  <ListItemText primary={t("application:modals.shareEditable")} />
+                  <ListItemSecondaryAction>
+                    <Checkbox checked={setting.editable} onChange={handleCheck("editable")} />
+                  </ListItemSecondaryAction>
+                </StyledListItemButton>
+              </AccordionSummary>
+              <AccordionDetails>{t("application:modals.shareEditableDes")}</AccordionDetails>
+            </Accordion>
+          )}
         </>
       )}
       <Accordion expanded={expanded === "expires"} onChange={handleExpand("expires")}>

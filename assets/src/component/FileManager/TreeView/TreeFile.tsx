@@ -62,6 +62,8 @@ export interface CustomContentProps extends TreeItemContentProps {
   fileIcon?: StartIcon;
   loading?: boolean;
   pinned?: boolean;
+  /** Fixed pins come from group defaults and cannot be unpinned. */
+  fixed?: boolean;
   canDrop?: boolean;
 }
 
@@ -73,6 +75,7 @@ export interface TreeFileProps extends TreeItemProps {
   fileIcon?: StartIcon;
   loading?: boolean;
   pinned?: boolean;
+  fixed?: boolean;
   canDrop?: boolean;
 }
 
@@ -274,7 +277,7 @@ const CustomContent = React.memo(
         </div>
         {FileItemIcon}
         {fileName}
-        <UnpinButton show={showDelete} uri={uri} />
+        <UnpinButton show={showDelete && !props.fixed} uri={uri} />
       </CustomContentRoot>
     );
   }),
@@ -283,9 +286,9 @@ const CustomContent = React.memo(
 const TreeFile = React.memo(
   React.forwardRef(function CustomTreeItem(props: TreeFileProps, ref: React.Ref<HTMLLIElement>) {
     const contentProps = useMemo(() => {
-      const { level, file, notLoaded, fileIcon, loading, pinned, canDrop } = props;
-      return { level, file, notLoaded, fileIcon, loading, pinned, canDrop };
-    }, [props.level, props.file, props.notLoaded, props.fileIcon, props.loading, props.canDrop, props.pinned]);
+      const { level, file, notLoaded, fileIcon, loading, pinned, fixed, canDrop } = props;
+      return { level, file, notLoaded, fileIcon, loading, pinned, fixed, canDrop };
+    }, [props.level, props.file, props.notLoaded, props.fileIcon, props.loading, props.canDrop, props.pinned, props.fixed]);
     return (
       <StyledTreeItemRoot
         ContentComponent={CustomContent}

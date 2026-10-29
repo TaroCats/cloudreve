@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"net/http"
+
 	"github.com/cloudreve/Cloudreve/v4/application/dependency"
 	"github.com/cloudreve/Cloudreve/v4/ent"
 	"github.com/cloudreve/Cloudreve/v4/inventory"
@@ -226,6 +228,34 @@ func UserStorage(c *gin.Context) {
 	})
 }
 
+// UserNodes lists processing nodes available to the caller's group
+func UserNodes(c *gin.Context) {
+	res, err := user.GetUserNodes(c)
+	if err != nil {
+		c.JSON(200, serializer.Err(c, err))
+		c.Abort()
+		return
+	}
+
+	c.JSON(200, serializer.Response{
+		Data: res,
+	})
+}
+
+// UserPolicies lists storage policies available to the caller's group
+func UserPolicies(c *gin.Context) {
+	res, err := user.GetUserPolicies(c)
+	if err != nil {
+		c.JSON(200, serializer.Err(c, err))
+		c.Abort()
+		return
+	}
+
+	c.JSON(200, serializer.Response{
+		Data: res,
+	})
+}
+
 // UserSetting 获取用户设定
 func UserSetting(c *gin.Context) {
 	res, err := user.GetUserSettings(c)
@@ -353,6 +383,32 @@ func UserPrepareLogin(c *gin.Context) {
 	}
 
 	c.JSON(200, serializer.Response{Data: res})
+}
+
+// SSORedirect starts third-party sign-in by redirecting the browser to the
+// identity provider.
+func SSORedirect(c *gin.Context) {
+	service := ParametersFromContext[*user.SSORedirectService](c, user.SSORedirectParameterCtx{})
+	target, err := service.Redirect(c)
+	if err != nil {
+		c.Redirect(http.StatusFound, user.LoginRedirectURL(c, err))
+		return
+	}
+
+	c.Redirect(http.StatusFound, target)
+}
+
+// SSOCallback finishes third-party sign-in and redirects the browser back to
+// the frontend with the issued credential (or an error) in the fragment.
+func SSOCallback(c *gin.Context) {
+	service := ParametersFromContext[*user.SSOCallbackService](c, user.SSOCallbackParameterCtx{})
+	target, err := service.Callback(c)
+	if err != nil {
+		c.Redirect(http.StatusFound, user.LoginRedirectURL(c, err))
+		return
+	}
+
+	c.Redirect(http.StatusFound, target)
 }
 
 // UserSearch Search user by keyword

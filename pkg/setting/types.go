@@ -31,6 +31,25 @@ const (
 	CaptchaCap       = CaptchaType("cap")
 )
 
+// EmailDomainFilterMode selects how EmailDomainFilter.Domains is applied
+// at registration.
+type EmailDomainFilterMode int
+
+const (
+	// EmailDomainFilterDisabled accepts any email domain.
+	EmailDomainFilterDisabled EmailDomainFilterMode = iota
+	// EmailDomainFilterWhitelist only accepts listed domains.
+	EmailDomainFilterWhitelist
+	// EmailDomainFilterBlacklist rejects listed domains.
+	EmailDomainFilterBlacklist
+)
+
+// EmailDomainFilter restricts which email domains can register.
+type EmailDomainFilter struct {
+	Mode    EmailDomainFilterMode
+	Domains []string
+}
+
 type ReCaptcha struct {
 	Key    string
 	Secret string
@@ -111,6 +130,7 @@ var (
 	CronTypeEntityCollect    = CronType("entity_collect")
 	CronTypeTrashBinCollect  = CronType("trash_bin_collect")
 	CronTypeOauthCredRefresh = CronType("oauth_cred_refresh")
+	CronTypeQuotaNotify      = CronType("quota_notify")
 )
 
 type Theme struct {
@@ -260,3 +280,21 @@ const (
 	MasterEncryptKeyVaultTypeEnv     = MasterEncryptKeyVaultType("env")
 	MasterEncryptKeyVaultTypeFile    = MasterEncryptKeyVaultType("file")
 )
+
+// SSOSetting holds third-party sign-in provider settings.
+type SSOSetting struct {
+	// OIDCEnabled turns on generic OIDC sign-in (covers Logto and any
+	// OIDC-compliant identity provider).
+	OIDCEnabled bool
+	// OIDCIssuer is the issuer URL used for OIDC discovery.
+	OIDCIssuer       string
+	OIDCClientID     string
+	OIDCClientSecret string
+	// OIDCDirectSignIn redirects visitors of the sign-in page straight to
+	// the identity provider.
+	OIDCDirectSignIn bool
+	// QQEnabled turns on QQ Connect sign-in.
+	QQEnabled   bool
+	QQAppID     string
+	QQAppSecret string
+}

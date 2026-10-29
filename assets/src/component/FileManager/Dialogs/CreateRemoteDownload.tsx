@@ -13,6 +13,7 @@ import { OutlineIconTextField } from "../../Common/Form/OutlineIconTextField.tsx
 import { PathSelectorForm } from "../../Common/Form/PathSelectorForm.tsx";
 import { ViewTaskAction } from "../../Common/Snackbar/snackbar.tsx";
 import DraggableDialog from "../../Dialogs/DraggableDialog.tsx";
+import TaskNodeSelect from "./TaskNodeSelect.tsx";
 import Link from "../../Icons/Link.tsx";
 import { FileManagerIndex } from "../FileManager.tsx";
 
@@ -26,6 +27,7 @@ const CreateRemoteDownload = () => {
   const [loading, setLoading] = useState(false);
   const [path, setPath] = useState("");
   const [url, setUrl] = useState("");
+  const [nodeId, setNodeId] = useState(0);
 
   const open = useAppSelector((state) => state.globalState.remoteDownloadDialogOpen);
   const target = useAppSelector((state) => state.globalState.remoteDownloadDialogFile);
@@ -55,6 +57,7 @@ const CreateRemoteDownload = () => {
         src_file: target ? getFileLinkedUri(target) : undefined,
         dst: path,
         src: url ? url.split("\n") : undefined,
+        node_id: nodeId || undefined,
       }),
     )
       .then(() => {
@@ -88,6 +91,7 @@ const CreateRemoteDownload = () => {
     >
       <DialogContent sx={{ pt: 1 }}>
         <Stack spacing={3}>
+          <TaskNodeSelect value={nodeId} onChange={setNodeId} />
           <Stack spacing={3} direction={isMobile ? "column" : "row"}>
             {target && <FileDisplayForm file={target} label={t("modals.remoteDownloadURL")} />}
             {!target && (

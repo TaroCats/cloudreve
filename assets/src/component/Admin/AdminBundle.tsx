@@ -1,4 +1,6 @@
+import AbuseList from "./Abuse/AbuseList";
 import EntitySetting from "./Entity/EntitySetting";
+import EventList from "./Event/EventList";
 import FileSetting from "./File/FileSetting";
 import FileSystem from "./FileSystem/Filesystem";
 import EditGroup from "./Group/EditGroup/EditGroup";
@@ -17,7 +19,9 @@ import TaskList from "./Task/TaskList";
 import UserSetting from "./User/UserSetting";
 
 export {
+  AbuseList,
   EditGroup,
+  EventList,
   EditNode,
   EditOAuthClient,
   EditStoragePolicy,

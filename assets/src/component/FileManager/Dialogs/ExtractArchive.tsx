@@ -3,6 +3,7 @@ import { useSnackbar } from "notistack";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { sendExtractArchive } from "../../../api/api.ts";
+import TaskNodeSelect from "./TaskNodeSelect.tsx";
 import { closeExtractArchiveDialog } from "../../../redux/globalStateSlice.ts";
 import { useAppDispatch, useAppSelector } from "../../../redux/hooks.ts";
 import { fileExtension, getFileLinkedUri } from "../../../util";
@@ -23,6 +24,7 @@ const ExtractArchive = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [loading, setLoading] = useState(false);
   const [path, setPath] = useState("");
+  const [nodeId, setNodeId] = useState(0);
   const [encoding, setEncoding] = useState(defaultEncodingValue);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -70,6 +72,7 @@ const ExtractArchive = () => {
         encoding: showEncodingOption && encoding != defaultEncodingValue ? encoding : undefined,
         password: showPasswordOption && password ? password : undefined,
         file_mask: mask ?? undefined,
+        node_id: nodeId || undefined,
       }),
     )
       .then(() => {
@@ -102,6 +105,9 @@ const ExtractArchive = () => {
     >
       <DialogContent sx={{ pt: 1 }}>
         <Grid2 container spacing={3}>
+          <Grid2 size={{ xs: 12 }}>
+            <TaskNodeSelect value={nodeId} onChange={setNodeId} />
+          </Grid2>
           {target && (
             <Grid2
               size={{

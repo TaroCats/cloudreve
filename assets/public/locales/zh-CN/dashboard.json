@@ -11,6 +11,7 @@
     "40060": "从机无法向主机发送回调请求，请检查主机端 参数设置 - 站点信息 - 站点 URL 设置，并确保从机可以连接到此地址 ({{message}})",
     "40061": "Cloudreve 版本不一致 ({{message}})",
     "40086": "节点正在被以下存储策略使用：{{message}}",
+    "40091": "操作过于频繁，请稍后再试",
     "50008": "设置项更新失败 ({{message}})",
     "50009": "跨域策略添加失败"
   },
@@ -351,6 +352,12 @@
     "logto": "Logto",
     "logtoDes": "借由 <0>Logto</0>，你可以实现更多第三方平台的互联登录，比如 Apple、GitHub、Microsoft Entra ID、Google、短信等。请在 Logto 管理面板创建一个 “传统网页应用”，并将 <1>{{url}}</1> 加入到 “重定向 URIs” 中。",
     "thirdPartySignIn": "第三方登录",
+    "qqConnect": "QQ 互联",
+    "qqConnectDes": "QQ 互联登录暂未启用，此处仅预先保留配置。",
+    "qqAppID": "App ID",
+    "qqAppSecret": "App Key",
+    "ssoDirectSignIn": "自动跳转登录",
+    "ssoDirectSignInDes": "开启后，访问登录页会直接跳转到身份提供商发起登录，跳过本地登录表单。",
     "logo": "LOGO",
     "logoDes": "LOGO 图像的地址，用于在左上角展示；请分别提供黑暗模式和日间模式下不同的 LOGO。",
     "dark": "黑暗模式",
@@ -668,6 +675,10 @@
     "defaultTheme": "默认",
     "auditLog": "事件",
     "auditLogDes": "配置哪些事件应该被记录。某些事件可能会被系统用于提供额外功能，例如文件活动和登录活动。",
+    "auditLogEnabled": "启用事件记录",
+    "auditLogEnabledDes": "开启后，被选中的事件将被记录到审计日志中。",
+    "auditLogTypes": "记录的事件类型",
+    "auditLogTypesDes": "选择需要记录的事件类型；未选择任何类型时将记录全部事件。",
     "systemEvents": "系统事件",
     "systemEventsDes": "与系统操作和状态相关的事件。",
     "userEvents": "用户事件",
@@ -820,7 +831,10 @@
     "ftsTikaExts": "支持的扩展名",
     "ftsTikaExtsDes": "逗号分隔的文件扩展名列表，Tika 将处理这些类型的文件。",
     "ftsTikaMaxFileSize": "最大文件大小",
-    "ftsTikaMaxFileSizeDes": "发送至 Tika 进行内容提取的文件最大大小。"
+    "ftsTikaMaxFileSizeDes": "发送至 Tika 进行内容提取的文件最大大小。",
+    "quotaNotify": "配额通知",
+    "cronQuotaNotify": "超配额通知周期",
+    "cronQuotaNotifyDes": "定时检查超出用户组配额的用户并发送邮件通知，每个超额周期只通知一次。填写 Cron 表达式（如 @every 24h），留空则关闭。"
   },
   "giftCodes": {
     "giftCodesSettings": "礼品码",
@@ -980,6 +994,12 @@
     "ks3": "金山云 KS3",
     "obs": "华为云 OBS",
     "load_balance": "负载均衡",
+    "memberPolicies": "成员存储策略",
+    "memberPoliciesDes": "选择加入负载均衡池的存储策略。上传时文件会按分配策略存放到其中一个成员策略中。",
+    "strategy": "分配策略",
+    "strategyDes": "每次上传时如何从成员存储策略中选择目标。",
+    "roundRobin": "轮询",
+    "leastUsed": "最少使用",
     "childPolicy": "子存储策略",
     "childPolicyDes": "选择你要添加到负载均衡中的子存储策略。",
     "weight": "权重",
@@ -1479,7 +1499,9 @@
     "rawContent": "原始记录",
     "confirmDelete": "确认要删除此事件？",
     "deleteXEvents": "删除 {{num}} 个事件",
-    "confirmBatchDelete": "确认要删除 {{num}} 个事件？"
+    "confirmBatchDelete": "确认要删除 {{num}} 个事件？",
+    "allEventTypes": "所有事件类型",
+    "empty": "暂无事件记录"
   },
   "share": {
     "confirmBatchDelete": "确认要删除 {{num}} 个分享？",
@@ -1736,7 +1758,8 @@
     "customPaymentEndpointDes": "创建支付订单时请求的接口 URL。",
     "appFeedback": "反馈页面 URL",
     "appForum": "用户论坛 URL",
-    "appLinkDes": "用于在 App 设置页面展示，留空即不展示链接按钮，仅当 VOL 授权有效时此项设置才会生效。"
+    "appLinkDes": "用于在 App 设置页面展示，留空即不展示链接按钮，仅当 VOL 授权有效时此项设置才会生效。",
+    "filterEmailProviderListDes": "允许或禁止的邮箱域名列表，使用逗号分隔，例如 example.com, another.org。支持匹配子域（填写 example.com 即匹配 mail.example.com）。"
   },
   "pro": {
     "title": "Pro 版本专属功能",
@@ -1766,6 +1789,11 @@
     "reporterID": "举报者用户 ID",
     "reportedUserID": "举报对象用户 ID",
     "shareID": "分享 ID",
-    "reason": "原因"
+    "reason": "原因",
+    "share": "分享",
+    "reportedUser": "被举报人",
+    "createdAt": "举报时间",
+    "anonymous": "匿名",
+    "empty": "暂无举报记录"
   }
 }

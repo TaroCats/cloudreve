@@ -20,6 +20,10 @@
     "captcha": "验证码",
     "captchaError": "验证码加载失败：",
     "signIn": "登录",
+    "signInWithSSO": "使用 SSO 登录",
+    "signInWithQQ": "使用 QQ 登录",
+    "ssoLoginFailed": "第三方登录失败",
+    "ssoLoginFailedWith": "第三方登录失败：{{msg}}",
     "signUp": "注册",
     "signUpAccount": "注册账号",
     "useFIDO2": "使用通行密钥器登录",
@@ -301,6 +305,7 @@
     "activity": "活动",
     "goToSharedLink": "转到分享链接",
     "saveShortcut": "保存分享为快捷方式",
+    "reportShare": "举报",
     "customizeIcon": "自定义图标",
     "tags": "标签",
     "apply": "应用",
@@ -453,7 +458,11 @@
     "noEncryption": "未加密",
     "ftsStatus": "全文索引",
     "ftsIndexed": "已索引",
-    "ftsNotIndexed": "未索引"
+    "ftsNotIndexed": "未索引",
+    "migratePolicyUserDes": "将你自己的文件从源存储策略迁移到目标策略。任务在后台执行，可在任务队列中查看进度。",
+    "migratePolicySrc": "源存储策略",
+    "taskNode": "处理节点",
+    "taskNodeAuto": "自动分配"
   },
   "modals": {
     "includePasswordInShareLink": "在链接中包含密码",
@@ -473,6 +482,10 @@
     "discardUnsavedConfirm": "有未保存的更改，确定要关闭吗？",
     "overwrite": "覆盖",
     "editShareLink": "编辑分享链接",
+    "reportShare": "举报分享",
+    "reportShareReason": "举报理由",
+    "reportShareReasonPlaceholder": "请描述举报理由，最多 1000 字",
+    "reportShareSuccess": "举报已提交，感谢您的反馈",
     "clearPermissions": "清除权限设置",
     "shortcutCreated": "快捷方式已创建",
     "createShortcut": "创建快捷方式",
@@ -611,7 +624,9 @@
     "viewSetting": "视图设置",
     "saved": "已保存",
     "notSet": "未设置",
-    "deleteViewSetting": "删除视图设置"
+    "deleteViewSetting": "删除视图设置",
+    "shareEditable": "允许匿名编辑",
+    "shareEditableDes": "开启后，通过分享链接访问的匿名用户可以创建、修改和删除分享目录下的文件（协作模式）。关闭则仅可读。"
   },
   "uploader": {
     "fileCopyName": "副本_",
@@ -991,8 +1006,17 @@
     "validDurationDays": "{{num}} 天",
     "reportTarget": "举报对象",
     "reportReason": "原因",
-    "reportReasonOptions": ["侵权", "有害内容", "垃圾信息", "其他"],
+    "reportReasonOptions": [
+      "侵权",
+      "有害内容",
+      "垃圾信息",
+      "其他"
+    ],
     "reportDescription": "补充说明",
     "reportAbuseSuccess": "举报已提交"
+  },
+  "announcement": {
+    "title": "站点公告",
+    "gotIt": "我知道了"
   }
 }

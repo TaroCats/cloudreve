@@ -75,11 +75,11 @@ func init() {
 }
 
 // NewCreateArchiveTask creates a new CreateArchiveTask
-func NewCreateArchiveTask(ctx context.Context, src []string, dst string) (queue.Task, error) {
+func NewCreateArchiveTask(ctx context.Context, src []string, dst string, nodeID int) (queue.Task, error) {
 	state := &CreateArchiveTaskState{
 		Uris:      src,
 		Dst:       dst,
-		NodeState: NodeState{},
+		NodeState: NodeState{NodeID: nodeID},
 	}
 	stateBytes, err := json.Marshal(state)
 	if err != nil {
@@ -126,7 +126,7 @@ func (m *CreateArchiveTask) Do(ctx context.Context) (task.Status, error) {
 	m.state = state
 
 	// select node
-	node, err := allocateNode(ctx, dep, &m.state.NodeState, types.NodeCapabilityCreateArchive)
+	node, err := allocateNode(ctx, dep, &m.state.NodeState, types.NodeCapabilityCreateArchive, m.Owner())
 	if err != nil {
 		return task.StatusError, fmt.Errorf("failed to allocate node: %w", err)
 	}

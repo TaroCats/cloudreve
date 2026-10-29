@@ -17,6 +17,12 @@ type (
 		DisableViewSync     bool                     `json:"disable_view_sync,omitempty"`
 		FsViewMap           map[string]ExplorerView  `json:"fs_view_map,omitempty"`
 		ShareLinksInProfile ShareLinksInProfileLevel `json:"share_links_in_profile,omitempty"`
+		// QuotaNotified marks that the user has been notified about the
+		// current over-quota episode; reset once usage drops back.
+		QuotaNotified bool `json:"quota_notified,omitempty"`
+		// SSOBindings maps SSO provider name (e.g. "oidc") to the subject
+		// (IdP user identity) the account is linked to.
+		SSOBindings map[string]string `json:"sso_bindings,omitempty"`
 	}
 
 	ShareLinksInProfileLevel string
@@ -24,6 +30,17 @@ type (
 	PinedFile struct {
 		Uri  string `json:"uri"`
 		Name string `json:"name,omitempty"`
+		// Fixed marks sidebar pins injected from group DefaultPinned; users
+		// cannot unpin them from the sidebar.
+		Fixed bool `json:"fixed,omitempty"`
+	}
+
+	// DefaultPinnedShare references a share force-pinned for a user group.
+	// Stored as numeric share ID so it survives hash ID salt changes; the
+	// sidebar URI is built at response time.
+	DefaultPinnedShare struct {
+		ShareID int    `json:"share_id"`
+		Name    string `json:"name,omitempty"`
 	}
 
 	// GroupSetting 用户组其他配置
@@ -43,6 +60,12 @@ type (
 		// keyed by storage policy ID. A missing entry or 0 means the policy
 		// only falls back to the group-wide MaxStorage limit.
 		PolicyQuotas map[int]int64 `json:"policy_quotas,omitempty"`
+		// DefaultPinned share shortcuts force-pinned at the top of the
+		// sidebar for members of this group. Members cannot unpin them.
+		DefaultPinned []DefaultPinnedShare `json:"default_pinned,omitempty"`
+		// AllowedNodes restricts which task processing nodes members may
+		// use. Empty means all nodes are allowed.
+		AllowedNodes []int `json:"allowed_nodes,omitempty"`
 	}
 
 	// PolicySetting 非公有的存储策略属性
@@ -112,6 +135,11 @@ type (
 		ChunkConcurrency int `json:"chunk_concurrency,omitempty"`
 		// Whether to enable file encryption.
 		Encryption bool `json:"encryption,omitempty"`
+		// LoadBalancePolicyIDs member storage policies of a load_balance policy.
+		LoadBalancePolicyIDs []int `json:"policy_ids,omitempty"`
+		// LoadBalanceStrategy how a load_balance policy picks a member for each
+		// upload: LoadBalanceStrategyRoundRobin (default) or LoadBalanceStrategyLeastUsed.
+		LoadBalanceStrategy string `json:"strategy,omitempty"`
 	}
 
 	FileType         int
@@ -236,6 +264,10 @@ type (
 		ShareView bool `json:"share_view,omitempty"`
 		// Whether to automatically show readme file in share view
 		ShowReadMe bool `json:"show_read_me,omitempty"`
+		// Editable grants anonymous visitors write access (create/edit/delete)
+		// under the shared folder. Requires the escalate_anonymity group
+		// permission on the share creator.
+		Editable bool `json:"editable,omitempty"`
 	}
 
 	OAuthClientProps struct {
@@ -262,14 +294,14 @@ const (
 	GroupPermissionArchiveTask
 	GroupPermissionWebDAVProxy
 	GroupPermissionShareDownload
-	GroupPermission_CommunityPlaceholder1
+	GroupPermissionMigratePolicy
 	GroupPermissionRemoteDownload
-	GroupPermission_CommunityPlaceholder2
+	GroupPermissionSelectNode
 	GroupPermissionRedirectedSource // not used
 	GroupPermissionAdvanceDelete
-	GroupPermission_CommunityPlaceholder3
-	GroupPermission_CommunityPlaceholder4
-	GroupPermissionSetExplicitUser_placeholder
+	GroupPermissionFolderDirectLink
+	GroupPermissionEscalateAnonymity
+	GroupPermissionSetAnonymousPermission
 	GroupPermissionIgnoreFileOwnership // not used
 	GroupPermissionUniqueRedirectDirectLink
 )
@@ -310,16 +342,25 @@ const (
 )
 
 const (
-	PolicyTypeLocal  = "local"
-	PolicyTypeQiniu  = "qiniu"
-	PolicyTypeUpyun  = "upyun"
-	PolicyTypeOss    = "oss"
-	PolicyTypeCos    = "cos"
-	PolicyTypeS3     = "s3"
-	PolicyTypeKs3    = "ks3"
-	PolicyTypeOd     = "onedrive"
-	PolicyTypeRemote = "remote"
-	PolicyTypeObs    = "obs"
+	PolicyTypeLocal       = "local"
+	PolicyTypeQiniu       = "qiniu"
+	PolicyTypeUpyun       = "upyun"
+	PolicyTypeOss         = "oss"
+	PolicyTypeCos         = "cos"
+	PolicyTypeS3          = "s3"
+	PolicyTypeKs3         = "ks3"
+	PolicyTypeOd          = "onedrive"
+	PolicyTypeRemote      = "remote"
+	PolicyTypeObs         = "obs"
+	PolicyTypeLoadBalance = "load_balance"
+)
+
+// Selection strategies for load_balance storage policies.
+const (
+	// LoadBalanceStrategyRoundRobin cycles through member policies in order.
+	LoadBalanceStrategyRoundRobin = "round_robin"
+	// LoadBalanceStrategyLeastUsed picks the member with the least stored data.
+	LoadBalanceStrategyLeastUsed = "least_used"
 )
 
 const (
@@ -389,6 +430,7 @@ const (
 	CustomPropsTypeBoolean     = "boolean"
 	CustomPropsTypeSelect      = "select"
 	CustomPropsTypeMultiSelect = "multi_select"
+	CustomPropsTypeUser        = "user"
 	CustomPropsTypeLink        = "link"
 	CustomPropsTypeRating      = "rating"
 )
@@ -424,4 +466,74 @@ const (
 	ScopeFinanceWrite          = "Finance.Write"
 	ScopeDavAccountRead        = "DavAccount.Read"
 	ScopeDavAccountWrite       = "DavAccount.Write"
+)
+
+// AuditLogType identifies the category of an audit log entry. Values must
+// match the frontend AuditLogType enum in assets/src/api/explorer.ts.
+type AuditLogType int
+
+// Audit log event types.
+const (
+	AuditLogTypeServerStart             = 0
+	AuditLogTypeUserSignup              = 1
+	AuditLogTypeEmailSent               = 2
+	AuditLogTypeUserActivated           = 3
+	AuditLogTypeUserLoginFailed         = 4
+	AuditLogTypeUserLogin               = 5
+	AuditLogTypeUserTokenRefresh        = 6
+	AuditLogTypeFileCreate              = 7
+	AuditLogTypeFileRename              = 8
+	AuditLogTypeSetFilePermission       = 9
+	AuditLogTypeEntityUploaded          = 10
+	AuditLogTypeEntityDownloaded        = 11
+	AuditLogTypeCopyFrom                = 12
+	AuditLogTypeCopyTo                  = 13
+	AuditLogTypeMoveTo                  = 14
+	AuditLogTypeDeleteFile              = 15
+	AuditLogTypeMoveToTrash             = 16
+	AuditLogTypeShare                   = 17
+	AuditLogTypeShareLinkViewed         = 18
+	AuditLogTypeSetCurrentVersion       = 19
+	AuditLogTypeDeleteVersion           = 20
+	AuditLogTypeThumbGenerated          = 21
+	AuditLogTypeLivePhotoUploaded       = 22
+	AuditLogTypeUpdateMetadata          = 23
+	AuditLogTypeEditShare               = 24
+	AuditLogTypeDeleteShare             = 25
+	AuditLogTypeMount                   = 26
+	AuditLogTypeRelocate                = 27
+	AuditLogTypeCreateArchive           = 28
+	AuditLogTypeExtractArchive          = 29
+	AuditLogTypeWebdavLoginFailed       = 30
+	AuditLogTypeWebdavAccountCreate     = 31
+	AuditLogTypeWebdavAccountUpdate     = 32
+	AuditLogTypeWebdavAccountDelete     = 33
+	AuditLogTypePaymentCreated          = 34
+	AuditLogTypePointsChange            = 35
+	AuditLogTypePaymentPaid             = 36
+	AuditLogTypePaymentFulfilled        = 37
+	AuditLogTypePaymentFulfillFailed    = 38
+	AuditLogTypeStorageAdded            = 39
+	AuditLogTypeGroupChanged            = 40
+	AuditLogTypeUserExceedQuotaNotified = 41
+	AuditLogTypeUserChanged             = 42
+	AuditLogTypeGetDirectLink           = 43
+	AuditLogTypeLinkAccount             = 44
+	AuditLogTypeUnlinkAccount           = 45
+	AuditLogTypeChangeNick              = 46
+	AuditLogTypeChangeAvatar            = 47
+	AuditLogTypeMembershipUnsubscribe   = 48
+	AuditLogTypeChangePassword          = 49
+	AuditLogTypeEnable2FA               = 50
+	AuditLogTypeDisable2FA              = 51
+	AuditLogTypeAddPasskey              = 52
+	AuditLogTypeRemovePasskey           = 53
+	AuditLogTypeRedeemGiftCode          = 54
+	AuditLogTypeFileImported            = 55
+	AuditLogTypeUpdateView              = 56
+	AuditLogTypeDeleteDirectLink        = 57
+	AuditLogTypeReportAbuse             = 58
+	AuditLogTypeOauthGrantCreate        = 59
+	AuditLogTypeOauthTokenExchange      = 60
+	AuditLogTypeOauthGrantRevoke        = 61
 )

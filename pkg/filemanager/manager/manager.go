@@ -23,6 +23,10 @@ import (
 
 var (
 	ErrUnknownPolicyType = serializer.NewError(serializer.CodeInternalSetting, "Unknown policy type", nil)
+	// ErrLoadBalancePolicyNotResolved a load_balance virtual policy reached
+	// the driver layer without being dereferenced to a member policy.
+	ErrLoadBalancePolicyNotResolved = serializer.NewError(serializer.CodeInternalSetting,
+		"Load balance policy must be resolved to a member policy first", nil)
 )
 
 const (
@@ -126,6 +130,7 @@ type (
 		Expire          *time.Time
 		ShareView       bool
 		ShowReadMe      bool
+		Editable        bool
 	}
 
 	FullTextSearchResults struct {

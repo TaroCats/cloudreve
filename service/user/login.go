@@ -8,6 +8,8 @@ import (
 	"github.com/cloudreve/Cloudreve/v4/ent"
 	"github.com/cloudreve/Cloudreve/v4/ent/user"
 	"github.com/cloudreve/Cloudreve/v4/inventory"
+	"github.com/cloudreve/Cloudreve/v4/inventory/types"
+	"github.com/cloudreve/Cloudreve/v4/pkg/audit"
 	"github.com/cloudreve/Cloudreve/v4/pkg/auth"
 	"github.com/cloudreve/Cloudreve/v4/pkg/cluster/routes"
 	"github.com/cloudreve/Cloudreve/v4/pkg/email"
@@ -140,9 +142,11 @@ func (service *UserLoginService) Login(c *gin.Context) (*ent.User, string, error
 	}
 
 	if err != nil {
+		audit.Log(c, types.AuditLogTypeUserLoginFailed, map[string]string{"email": service.UserName})
 		return nil, "", err
 	}
 
+	audit.Log(c, types.AuditLogTypeUserLogin, map[string]string{"email": expectedUser.Email})
 	if expectedUser.TwoFactorSecret != "" {
 		twoFaSessionID := uuid.Must(uuid.NewV4())
 		dep.KV().Set(fmt.Sprintf("user_2fa_%s", twoFaSessionID), expectedUser.ID, 600)
@@ -246,20 +250,34 @@ func (service *OtpValidationService) Verify2FA(c *gin.Context) (*ent.User, error
 type (
 	PrepareLoginParameterCtx struct{}
 	PrepareLoginService      struct {
-		Email string `form:"email" binding:"required,email"`
+		// Email is optional: when empty, only global sign-in options
+		// (SSO flags) are returned without a user lookup.
+		Email string `form:"email" binding:"omitempty,email"`
 	}
 )
 
 func (service *PrepareLoginService) Prepare(c *gin.Context) (*PrepareLoginResponse, error) {
 	dep := dependency.FromContext(c)
+	sso := dep.SettingProvider().SSO(c)
+	response := &PrepareLoginResponse{
+		SSOEnabled:      oidcReady(sso),
+		QQEnabled:       qqReady(sso),
+		SSODirectSignIn: sso.OIDCDirectSignIn && oidcReady(sso),
+	}
+
+	if service.Email == "" {
+		// Global options only, used by the login page before an email is
+		// entered.
+		return response, nil
+	}
+
 	ctx := context.WithValue(c, inventory.LoadUserPasskey{}, true)
 	expectedUser, err := dep.UserClient().GetByEmail(ctx, service.Email)
 	if err != nil {
 		return nil, serializer.NewError(serializer.CodeNotFound, "User not found", err)
 	}
 
-	return &PrepareLoginResponse{
-		WebAuthnEnabled: len(expectedUser.Edges.Passkey) > 0,
-		PasswordEnabled: expectedUser.Password != "",
-	}, nil
+	response.WebAuthnEnabled = len(expectedUser.Edges.Passkey) > 0
+	response.PasswordEnabled = expectedUser.Password != ""
+	return response, nil
 }

@@ -8,7 +8,6 @@ import ResponsiveTabs, { Tab } from "../../Common/ResponsiveTabs.tsx";
 import Bot from "../../Icons/Bot.tsx";
 import Color from "../../Icons/Color.tsx";
 import CubeSync from "../../Icons/CubeSync.tsx";
-import Currency from "../../Icons/Currency.tsx";
 import FilmstripImage from "../../Icons/FilmstripImage.tsx";
 import Globe from "../../Icons/Globe.tsx";
 import MailOutlined from "../../Icons/MailOutlined.tsx";
@@ -27,7 +26,6 @@ import ServerSetting from "./Server/ServerSetting.tsx";
 import SettingsWrapper from "./SettingWrapper.tsx";
 import SiteInformation from "./SiteInformation/SiteInformation.tsx";
 import UserSession from "./UserSession/UserSession.tsx";
-import VAS from "./VAS/VAS.tsx";
 
 export const StyledInputAdornment = styled(InputAdornment)(({ theme }) => ({
   fontSize: theme.typography.body2.fontSize,
@@ -71,7 +69,6 @@ export enum SettingsPageTab {
   Captcha = "captcha",
   FileSystem = "fileSystem",
   MediaProcessing = "mediaProcessing",
-  VAS = "vas",
   Email = "email",
   Queue = "queue",
   Appearance = "appearance",
@@ -106,11 +103,6 @@ const Settings = () => {
           label: t("nav.mediaProcessing"),
           value: SettingsPageTab.MediaProcessing,
           icon: <FilmstripImage />,
-        },
-        {
-          label: t("vas.vas"),
-          value: SettingsPageTab.VAS,
-          icon: <Currency />,
         },
         {
           label: t("nav.email"),
@@ -174,6 +166,7 @@ const Settings = () => {
                     "privacy_policy_url",
                     "show_app_promotion",
                     "show_desktop_app_promotion",
+                    "announcement",
                   ]}
                 >
                   <SiteInformation />
@@ -191,6 +184,10 @@ const Settings = () => {
                     "avatar_size",
                     "avatar_size_l",
                     "gravatar_server",
+                    "disable_sub_address_email",
+                    "email_domain_filter_mode",
+                    "email_domain_filter_list",
+                    "default_symbolics",
                   ]}
                 >
                   <UserSession />
@@ -275,11 +272,6 @@ const Settings = () => {
                   <Media />
                 </SettingsWrapper>
               )}
-              {tab === SettingsPageTab.VAS && (
-                <SettingsWrapper settings={[]}>
-                  <VAS />
-                </SettingsWrapper>
-              )}
               {tab === SettingsPageTab.Email && (
                 <SettingsWrapper
                   settings={[
@@ -293,7 +285,9 @@ const Settings = () => {
                     "smtpEncryption",
                     "fromName",
                     "mail_activation_template",
+                    "mail_exceed_quota_template",
                     "mail_reset_template",
+                    "cron_quota_notify",
                   ]}
                 >
                   <Email />
@@ -319,7 +313,7 @@ const Settings = () => {
                 </SettingsWrapper>
               )}
               {tab === SettingsPageTab.Events && (
-                <SettingsWrapper settings={[]}>
+                <SettingsWrapper settings={["audit_log_enabled", "audit_log_types"]}>
                   <Events />
                 </SettingsWrapper>
               )}

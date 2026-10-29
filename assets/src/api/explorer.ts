@@ -90,6 +90,8 @@ export interface Share {
   source_uri?: string;
   password?: string;
   show_readme?: boolean;
+  /** Editable shares grant anonymous visitors write access (owner view only). */
+  editable?: boolean;
 }
 
 export enum PolicyType {
@@ -308,6 +310,8 @@ export interface ShareCreateService {
   expire?: number;
   share_view?: boolean;
   show_readme?: boolean;
+  /** Grant anonymous visitors write access (folder shares). */
+  editable?: boolean;
 }
 
 export interface CreateFileService {

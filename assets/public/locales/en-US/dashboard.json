@@ -11,6 +11,7 @@
     "40060": "Slave node cannot send callback request to master, please check master node setting: Basic - Site Information - Site URL, please make sure slave node can access this url. ({{message}})",
     "40061": "Mismatched Cloudreve version. ({{message}})",
     "40086": "The node is being used by the following storage policies: {{message}}.",
+    "40091": "Too many requests. Please try again later.",
     "50008": "Failed to update setting. ({{message}})",
     "50009": "Failed to add CORS policy."
   },
@@ -351,6 +352,12 @@
     "logto": "Logto",
     "logtoDes": "With <0>Logto</0>, you can achieve more third-party platform sign-ins, such as Apple, GitHub, Microsoft Entra ID, Google, SMS, etc. Please create a \"Traditional Web Application\" in the Logto management portal and add <1>{{url}}</1> to the \"Redirect URIs\".",
     "thirdPartySignIn": "Third-party sign-in",
+    "qqConnect": "QQ Connect",
+    "qqConnectDes": "QQ Connect sign-in is not available yet; the settings are reserved for future use.",
+    "qqAppID": "App ID",
+    "qqAppSecret": "App Key",
+    "ssoDirectSignIn": "Automatic sign-in redirect",
+    "ssoDirectSignInDes": "When enabled, visiting the sign-in page immediately redirects to the identity provider, skipping the local sign-in form.",
     "logo": "LOGO",
     "logoDes": "URL of the LOGO, please provide different logos for dark and light modes.",
     "dark": "Dark mode",
@@ -668,6 +675,10 @@
     "defaultTheme": "Default",
     "auditLog": "Events",
     "auditLogDes": "Configure which events should be recorded. Some events might be used by the system to provide additional features, e.g. file activity and sign in activity.",
+    "auditLogEnabled": "Enable event logging",
+    "auditLogEnabledDes": "When enabled, selected events are recorded in the audit log.",
+    "auditLogTypes": "Recorded event types",
+    "auditLogTypesDes": "Select which event types to record. When no type is selected, all events are recorded.",
     "systemEvents": "System events",
     "systemEventsDes": "Events related to system operations and status.",
     "userEvents": "User events",
@@ -820,7 +831,10 @@
     "ftsTikaExts": "Supported extensions",
     "ftsTikaExtsDes": "Comma-separated list of file extensions. Tika will process files of these types.",
     "ftsTikaMaxFileSize": "Maximum file size",
-    "ftsTikaMaxFileSizeDes": "Maximum file size to send to Tika for content extraction."
+    "ftsTikaMaxFileSizeDes": "Maximum file size to send to Tika for content extraction.",
+    "quotaNotify": "Quota notification",
+    "cronQuotaNotify": "Over-quota notify schedule",
+    "cronQuotaNotifyDes": "Periodically checks users exceeding their group storage quota and emails them once per over-quota episode. Cron expression (e.g. @every 24h); leave empty to disable."
   },
   "giftCodes": {
     "giftCodesSettings": "Gift Codes",
@@ -980,6 +994,12 @@
     "ks3": "Kingsoft Cloud S3",
     "obs": "Huawei Cloud OBS",
     "load_balance": "Load Balance",
+    "memberPolicies": "Member Storage Policies",
+    "memberPoliciesDes": "Select the storage policies that join the load balance pool. Each upload is stored on one member policy chosen by the strategy below.",
+    "strategy": "Allocation Strategy",
+    "strategyDes": "How the target member storage policy is picked for each upload.",
+    "roundRobin": "Round robin",
+    "leastUsed": "Least used",
     "childPolicy": "Child Storage Policy",
     "childPolicyDes": "Select the child storage policies to add to the load balance pool.",
     "weight": "Weight",
@@ -1480,7 +1500,8 @@
     "rawContent": "Raw content",
     "confirmDelete": "Are you sure you want to delete this event?",
     "deleteXEvents": "Delete {{num}} events",
-    "confirmBatchDelete": "Are you sure you want to delete {{num}} events?"
+    "confirmBatchDelete": "Are you sure you want to delete {{num}} events?",
+    "empty": "No events"
   },
   "share": {
     "confirmBatchDelete": "Are you sure you want to delete {{num}} shares?",
@@ -1737,7 +1758,8 @@
     "customPaymentEndpointDes": "URL to be requested when creating a payment order.",
     "appFeedback": "Feedback URL",
     "appForum": "User forum URL",
-    "appLinkDes": "Will be displayed in mobile client, leave empty to hide menu item. This setting will take effect only if VOL license is valid."
+    "appLinkDes": "Will be displayed in mobile client, leave empty to hide menu item. This setting will take effect only if VOL license is valid.",
+    "filterEmailProviderListDes": "Comma-separated email domains to allow or block, e.g. example.com, another.org. Sub-domains match too (example.com matches mail.example.com)."
   },
   "pro": {
     "title": "Pro edition exclusive features",
@@ -1767,6 +1789,11 @@
     "reporterID": "Reporter user ID",
     "reportedUserID": "Reported user ID",
     "shareID": "Shared ID",
-    "reason": "Reason"
+    "reason": "Reason",
+    "share": "Share",
+    "reportedUser": "Reported user",
+    "createdAt": "Reported at",
+    "anonymous": "Anonymous",
+    "empty": "No abuse reports"
   }
 }

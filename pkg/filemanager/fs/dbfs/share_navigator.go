@@ -27,6 +27,7 @@ const (
 )
 
 var shareNavigatorCapability = &boolset.BooleanSet{}
+var shareEditableNavigatorCapability = &boolset.BooleanSet{}
 
 // NewShareNavigator creates a navigator for user's "shared" file system.
 func NewShareNavigator(u *ent.User, fileClient inventory.FileClient, shareClient inventory.ShareClient,
@@ -145,6 +146,7 @@ func (n *shareNavigator) Root(ctx context.Context, path *fs.URI) (*File, error) 
 		n.shareRoot = n.shareRoot.Parent
 	}
 
+	n.share = share
 	n.shareRoot.Path[pathIndexUser] = path.Root()
 	n.shareRoot.OwnerModel = n.owner
 	n.shareRoot.IsUserRoot = true
@@ -259,9 +261,18 @@ func (n *shareNavigator) latestSharedSingleFile(ctx context.Context) (*File, err
 	return nil, fs.ErrPathNotExist
 }
 
+// shareEditable reports whether the share grants anonymous write access.
+func (n *shareNavigator) shareEditable() bool {
+	return n.share != nil && n.share.Props != nil && n.share.Props.Editable
+}
+
 func (n *shareNavigator) Capabilities(isSearching bool) *fs.NavigatorProps {
+	capability := shareNavigatorCapability
+	if n.shareEditable() {
+		capability = shareEditableNavigatorCapability
+	}
 	res := &fs.NavigatorProps{
-		Capability:            shareNavigatorCapability,
+		Capability:            capability,
 		OrderDirectionOptions: fullOrderDirectionOption,
 		OrderByOptions:        fullOrderByOption,
 		MaxPageSize:           n.config.MaxPageSize,

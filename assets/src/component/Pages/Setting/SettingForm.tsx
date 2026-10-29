@@ -1,14 +1,5 @@
-import { Chip, Grid2, Typography, styled } from "@mui/material";
-import { useCallback, useEffect, useState } from "react";
-import ProDialog from "../../Admin/Common/ProDialog";
-
-export const ProChip = styled(Chip)(({ theme }) => ({
-  marginLeft: 8,
-  height: "20px",
-  fontSize: "12px",
-  background: `linear-gradient(45deg, ${theme.palette.primary.main} 30%, ${theme.palette.primary.light} 90%)`,
-  color: theme.palette.primary.contrastText,
-}));
+import { Grid2, Typography } from "@mui/material";
+import { useEffect } from "react";
 
 export interface SettingFormProps {
   title?: React.ReactNode;
@@ -18,20 +9,9 @@ export interface SettingFormProps {
   spacing?: number;
   anchorId?: string;
   noContainer?: boolean;
-  pro?: boolean;
 }
 
-const SettingForm = ({
-  title,
-  children,
-  lgWidth = 8,
-  secondary,
-  spacing,
-  noContainer,
-  anchorId,
-  pro,
-}: SettingFormProps) => {
-  const [proOpen, setProOpen] = useState(false);
+const SettingForm = ({ title, children, lgWidth = 8, secondary, spacing, noContainer, anchorId }: SettingFormProps) => {
   useEffect(() => {
     if (anchorId && window.location.hash === `#${anchorId}`) {
       const anchor = document.getElementById(`anchor-${anchorId}`);
@@ -42,16 +22,6 @@ const SettingForm = ({
       }
     }
   }, [anchorId]);
-
-  const handleProClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (pro) {
-        e.stopPropagation();
-        setProOpen(true);
-      }
-    },
-    [pro],
-  );
 
   const inner = (
     <>
@@ -72,13 +42,11 @@ const SettingForm = ({
             id={anchorId ? `anchor-${anchorId}` : undefined}
           >
             {title}
-            {pro && <ProChip label="Pro" color="primary" size="small" />}
           </Typography>
         )}
-        <div onClick={handleProClick}>{children}</div>
+        <div>{children}</div>
       </Grid2>
       {secondary && secondary}
-      {pro && <ProDialog open={proOpen} onClose={() => setProOpen(false)} />}
     </>
   );
   if (noContainer) {

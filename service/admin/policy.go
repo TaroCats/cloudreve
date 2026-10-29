@@ -61,6 +61,88 @@ type PolicyService struct {
 	Region string `json:"region"`
 }
 
+// validateLoadBalancePolicy checks the member configuration of a
+// load_balance policy before it is persisted: at least one member, members
+// must exist and must not reference the policy itself or another
+// load_balance policy. It also normalizes the selection strategy.
+func validateLoadBalancePolicy(ctx context.Context, policy *ent.StoragePolicy, sc inventory.StoragePolicyClient) error {
+	if policy.Settings == nil {
+		policy.Settings = &types.PolicySetting{}
+	}
+
+	if policy.Settings.LoadBalanceStrategy == "" {
+		policy.Settings.LoadBalanceStrategy = types.LoadBalanceStrategyRoundRobin
+	}
+
+	switch policy.Settings.LoadBalanceStrategy {
+	case types.LoadBalanceStrategyRoundRobin, types.LoadBalanceStrategyLeastUsed:
+	default:
+		return serializer.NewError(serializer.CodeParamErr,
+			fmt.Sprintf("Unknown load balance strategy %q", policy.Settings.LoadBalanceStrategy), nil)
+	}
+
+	if len(policy.Settings.LoadBalancePolicyIDs) == 0 {
+		return serializer.NewError(serializer.CodeParamErr,
+			"Load balance policy requires at least one member policy", nil)
+	}
+
+	seen := make(map[int]struct{}, len(policy.Settings.LoadBalancePolicyIDs))
+	for _, id := range policy.Settings.LoadBalancePolicyIDs {
+		if id <= 0 {
+			return serializer.NewError(serializer.CodeParamErr,
+				fmt.Sprintf("Invalid member policy ID %d", id), nil)
+		}
+
+		if id == policy.ID {
+			return serializer.NewError(serializer.CodeParamErr,
+				"Load balance policy cannot contain itself as a member", nil)
+		}
+
+		if _, duplicated := seen[id]; duplicated {
+			return serializer.NewError(serializer.CodeParamErr,
+				fmt.Sprintf("Duplicated member policy ID %d", id), nil)
+		}
+		seen[id] = struct{}{}
+
+		member, err := sc.GetPolicyByID(ctx, id)
+		if err != nil || member == nil {
+			return serializer.NewError(serializer.CodePolicyNotExist,
+				fmt.Sprintf("Member storage policy %d does not exist", id), nil)
+		}
+
+		if member.Type == types.PolicyTypeLoadBalance {
+			return serializer.NewError(serializer.CodeParamErr,
+				"Load balance policy cannot contain another load balance policy", nil)
+		}
+	}
+
+	return nil
+}
+
+// loadBalancePoliciesReferencing returns names of load balance policies whose
+// member list contains the given policy ID.
+func loadBalancePoliciesReferencing(ctx context.Context, sc inventory.StoragePolicyClient, policyID int) ([]string, error) {
+	lbPolicies, err := sc.ListPolicyByType(ctx, types.PolicyTypeLoadBalance)
+	if err != nil {
+		return nil, err
+	}
+
+	var refs []string
+	for _, lb := range lbPolicies {
+		if lb.Settings == nil {
+			continue
+		}
+
+		for _, id := range lb.Settings.LoadBalancePolicyIDs {
+			if id == policyID {
+				refs = append(refs, lb.Name)
+				break
+			}
+		}
+	}
+	return refs, nil
+}
+
 // Delete 删除存储策略
 func (service *SingleStoragePolicyService) Delete(c *gin.Context) error {
 	// 禁止删除默认策略
@@ -81,6 +163,13 @@ func (service *SingleStoragePolicyService) Delete(c *gin.Context) error {
 	// If policy is used by groups, return error
 	if len(policy.Edges.Groups) > 0 {
 		return serializer.NewError(serializer.CodePolicyUsedByGroups, strconv.Itoa(len(policy.Edges.Groups)), nil)
+	}
+
+	// If policy is a member of a load balance policy, return error
+	if refs, err := loadBalancePoliciesReferencing(ctx, storagePolicyClient, service.ID); err != nil {
+		return serializer.NewError(serializer.CodeDBError, "Failed to check if policy is used by load balance policies", err)
+	} else if len(refs) > 0 {
+		return serializer.NewError(serializer.CodePolicyUsedByLoadBalance, strings.Join(refs, ", "), nil)
 	}
 
 	used, err := dep.FileClient().IsStoragePolicyUsedByEntities(ctx, service.ID)
@@ -266,6 +355,12 @@ func (service *CreateStoragePolicyService) Create(c *gin.Context) (*GetStoragePo
 	}
 
 	service.Policy.ID = 0
+	if service.Policy.Type == types.PolicyTypeLoadBalance {
+		if err := validateLoadBalancePolicy(c, service.Policy, storagePolicyClient); err != nil {
+			return nil, err
+		}
+	}
+
 	policy, err := storagePolicyClient.Upsert(c, service.Policy)
 	if err != nil {
 		return nil, serializer.NewError(serializer.CodeDBError, "Failed to create policy", err)
@@ -295,6 +390,12 @@ func (service *UpdateStoragePolicyService) Update(c *gin.Context) (*GetStoragePo
 	}
 
 	service.Policy.ID = idInt
+
+	if service.Policy.Type == types.PolicyTypeLoadBalance {
+		if err := validateLoadBalancePolicy(c, service.Policy, storagePolicyClient); err != nil {
+			return nil, err
+		}
+	}
 
 	sc, tx, ctx, err := inventory.WithTx(c, storagePolicyClient)
 	if err != nil {

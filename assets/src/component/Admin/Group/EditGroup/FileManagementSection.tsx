@@ -18,8 +18,7 @@ import { GroupPermission } from "../../../../api/user";
 import Boolset from "../../../../util/boolset";
 import SizeInput from "../../../Common/SizeInput";
 import { DenseFilledTextField } from "../../../Common/StyledComponents";
-import SettingForm, { ProChip } from "../../../Pages/Setting/SettingForm";
-import ProDialog from "../../Common/ProDialog";
+import SettingForm from "../../../Pages/Setting/SettingForm";
 import { NoMarginHelperText, SettingSection, SettingSectionContent } from "../../Settings/Settings";
 import { AnonymousGroupID } from "../GroupRow";
 import { GroupSettingContext } from "./GroupSettingWrapper";
@@ -30,7 +29,6 @@ const MonacoEditor = lazy(() => import("../../../Viewers/CodeViewer/MonacoEditor
 const FileManagementSection = () => {
   const { t } = useTranslation("dashboard");
   const { values, setGroup } = useContext(GroupSettingContext);
-  const [proOpen, setProOpen] = useState(false);
   const theme = useTheme();
 
   const [editedConfig, setEditedConfig] = useState("");
@@ -154,14 +152,38 @@ const FileManagementSection = () => {
     [setGroup],
   );
 
-  const onProClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    e.stopPropagation();
-    setProOpen(true);
-  }, []);
+  const onMigratePolicyChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setGroup((p: GroupEnt) => ({
+        ...p,
+        permissions: new Boolset(p.permissions).set(GroupPermission.migrate_policy, e.target.checked).toString(),
+      }));
+    },
+    [setGroup],
+  );
+
+  const onSelectNodeChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setGroup((p: GroupEnt) => ({
+        ...p,
+        permissions: new Boolset(p.permissions).set(GroupPermission.select_node, e.target.checked).toString(),
+      }));
+    },
+    [setGroup],
+  );
+
+  const onAllowedNodesChange = useCallback(
+    (nodeIds: number[]) => {
+      setGroup((p: GroupEnt) => ({
+        ...p,
+        settings: { ...p.settings, allowed_nodes: nodeIds.length > 0 ? nodeIds : undefined },
+      }));
+    },
+    [setGroup],
+  );
 
   return (
     <SettingSection>
-      <ProDialog open={proOpen} onClose={() => setProOpen(false)} />
       <Typography variant="h6" gutterBottom>
         {t("group.fileManagement")}
       </Typography>
@@ -196,15 +218,15 @@ const FileManagementSection = () => {
               </SettingForm>
             </Collapse>
             <SettingForm lgWidth={5}>
-              <FormControl fullWidth onClick={onProClick}>
+              <FormControl fullWidth>
                 <FormControlLabel
-                  control={<Switch checked={false} />}
-                  label={
-                    <Box sx={{ display: "flex", alignItems: "center" }}>
-                      {t("group.migratePolicy")}
-                      <ProChip size="small" label="Pro" />
-                    </Box>
+                  control={
+                    <Switch
+                      checked={permission.enabled(GroupPermission.migrate_policy)}
+                      onChange={onMigratePolicyChange}
+                    />
                   }
+                  label={t("group.migratePolicy")}
                 />
                 <NoMarginHelperText>{t("group.migratePolicyDes")}</NoMarginHelperText>
               </FormControl>
@@ -323,22 +345,25 @@ const FileManagementSection = () => {
                 <NoMarginHelperText>{t("group.advanceDeleteDes")}</NoMarginHelperText>
               </FormControl>
             </SettingForm>
-            <SettingForm title={t("group.allowedNodes")} lgWidth={5} pro>
+            <SettingForm title={t("group.allowedNodes")} lgWidth={5}>
               <FormControl fullWidth>
-                <MultipleNodeSelectionInput />
+                <MultipleNodeSelectionInput
+                  value={values.settings?.allowed_nodes ?? []}
+                  onChange={onAllowedNodesChange}
+                />
                 <NoMarginHelperText>{t("group.allowedNodesDes")}</NoMarginHelperText>
               </FormControl>
             </SettingForm>
             <SettingForm lgWidth={5}>
-              <FormControl fullWidth onClick={onProClick}>
+              <FormControl fullWidth>
                 <FormControlLabel
-                  control={<Switch checked={false} />}
-                  label={
-                    <Box sx={{ display: "flex", alignItems: "center" }}>
-                      {t("group.allowSelectNode")}
-                      <ProChip size="small" label="Pro" />
-                    </Box>
+                  control={
+                    <Switch
+                      checked={permission.enabled(GroupPermission.select_node)}
+                      onChange={onSelectNodeChange}
+                    />
                   }
+                  label={t("group.allowSelectNode")}
                 />
                 <NoMarginHelperText>{t("group.allowSelectNodeDes")}</NoMarginHelperText>
               </FormControl>

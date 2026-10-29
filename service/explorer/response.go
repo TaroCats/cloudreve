@@ -338,6 +338,7 @@ type Share struct {
 	IsPrivate bool   `json:"is_private,omitempty"`
 	Password  string `json:"password,omitempty"`
 	ShareView bool   `json:"share_view,omitempty"`
+	Editable  bool   `json:"editable,omitempty"`
 
 	// Only viewable if explicitly unlocked by owner
 	SourceUri string `json:"source_uri,omitempty"`
@@ -377,6 +378,7 @@ func BuildShare(ctx context.Context, s *ent.Share, base *url.URL, hasher hashid.
 	if requester.ID == owner.ID {
 		res.IsPrivate = s.Password != ""
 		res.ShareView = s.Props != nil && s.Props.ShareView
+		res.Editable = s.Props != nil && s.Props.Editable
 	}
 
 	return &res

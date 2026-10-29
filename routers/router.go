@@ -246,10 +246,18 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 		source.Use(middleware.ContentCORS())
 		{
 			source.OPTIONS("*option", middleware.ContentCORS())
-			source.GET(":id/:name",
+			// The first path segment is the link display name; for folder
+			// links the remaining segments address files under the folder.
+			source.GET(":id",
 				middleware.HashID(hashid.SourceLinkID),
 				controllers.AnonymousPermLink(false))
-			source.GET("d/:id/:name",
+			source.GET(":id/*path",
+				middleware.HashID(hashid.SourceLinkID),
+				controllers.AnonymousPermLink(false))
+			source.GET("d/:id",
+				middleware.HashID(hashid.SourceLinkID),
+				controllers.AnonymousPermLink(true))
+			source.GET("d/:id/*path",
 				middleware.HashID(hashid.SourceLinkID),
 				controllers.AnonymousPermLink(true))
 		}
@@ -368,6 +376,20 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 					controllers.FromJSON[usersvc.FinishPasskeyLoginService](usersvc.FinishPasskeyLoginParameterCtx{}),
 					controllers.FinishLoginAuthn,
 					controllers.UserIssueToken,
+				)
+			}
+
+			ssoRouter := session.Group("sso")
+			{
+				// Redirect to third-party identity provider
+				ssoRouter.GET(":provider/redirect",
+					controllers.FromUri[usersvc.SSORedirectService](usersvc.SSORedirectParameterCtx{}),
+					controllers.SSORedirect,
+				)
+				// Callback from third-party identity provider
+				ssoRouter.GET(":provider/callback",
+					controllers.FromUri[usersvc.SSOCallbackService](usersvc.SSOCallbackParameterCtx{}),
+					controllers.SSOCallback,
 				)
 			}
 		}
@@ -771,10 +793,12 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 				controllers.FromJSON[explorer.RebuildFTSIndexWorkflowService](explorer.CreateRebuildFTSIndexParamCtx{}),
 				controllers.RebuildFTSIndex,
 			)
-			// Create task to migrate entities between storage policies
+			// Create task to migrate entities between storage policies.
+			// Admins migrate policy-wide; users with the migrate_policy
+			// group permission migrate their own files only (checked in
+			// the service layer).
 			wf.POST("migratePolicy",
-				middleware.IsAdmin(),
-				middleware.RequiredScopes(types.ScopeWorkflowWrite, types.ScopeAdminWrite),
+				middleware.RequiredScopes(types.ScopeWorkflowWrite),
 				controllers.FromJSON[explorer.MigratePolicyWorkflowService](explorer.CreateMigratePolicyParamCtx{}),
 				controllers.MigratePolicy,
 			)
@@ -870,6 +894,12 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 				middleware.RequiredScopes(types.ScopeSharesWrite),
 				controllers.FromJSON[sharesvc.BatchDeleteShareService](sharesvc.BatchDeleteParamCtx{}),
 				controllers.BatchDeleteShare,
+			)
+			// 举报分享
+			share.POST("report/:id",
+				middleware.HashID(hashid.ShareID),
+				controllers.FromJSON[sharesvc.ReportShareService](sharesvc.ReportShareParamCtx{}),
+				controllers.ReportShare,
 			)
 			//// 获取README文本文件内容
 			//share.GET("readme/:id",
@@ -1254,6 +1284,35 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 						controllers.AdminBatchDeleteShare,
 					)
 				}
+				abuse := admin.Group("abuse")
+				{
+					// List abuse reports
+					abuse.POST("",
+						controllers.FromJSON[adminsvc.AdminListService](adminsvc.AdminListServiceParamsCtx{}),
+						controllers.AdminListAbuseReports,
+					)
+					// Dismiss abuse reports
+					abuse.POST("batch/delete",
+						middleware.RequiredScopes(types.ScopeAdminWrite),
+						controllers.FromJSON[adminsvc.BatchAbuseReportService](adminsvc.BatchAbuseReportParamCtx{}),
+						controllers.AdminBatchDeleteAbuseReports,
+					)
+				}
+
+				event := admin.Group("event")
+				{
+					// List audit logs
+					event.POST("list",
+						controllers.FromJSON[adminsvc.AdminListService](adminsvc.AdminListServiceParamsCtx{}),
+						controllers.AdminListAuditLogs,
+					)
+					// Batch delete audit logs
+					event.POST("batch/delete",
+						middleware.RequiredScopes(types.ScopeAdminWrite),
+						controllers.FromJSON[adminsvc.BatchAuditLogService](adminsvc.BatchAuditLogParamCtx{}),
+						controllers.AdminBatchDeleteAuditLog,
+					)
+				}
 			}
 
 			// 用户
@@ -1263,6 +1322,10 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 				user.GET("me", middleware.RequiredScopes(types.ScopeUserInfoRead), controllers.UserMe)
 				// 存储信息
 				user.GET("capacity", middleware.RequiredScopes(types.ScopeUserInfoRead), controllers.UserStorage)
+				// Storage policies available to the caller's group
+				user.GET("policies", middleware.RequiredScopes(types.ScopeUserInfoRead), controllers.UserPolicies)
+				// Processing nodes available to the caller's group
+				user.GET("nodes", middleware.RequiredScopes(types.ScopeUserInfoRead), controllers.UserNodes)
 				// Search user by keywords
 				user.GET("search",
 					middleware.RequiredScopes(types.ScopeUserInfoRead),

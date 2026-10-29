@@ -219,6 +219,9 @@ func (m *manager) ConfirmUploadSession(ctx context.Context, session *fs.UploadSe
 }
 
 func (m *manager) PrepareUpload(ctx context.Context, req *fs.UploadRequest, opts ...fs.Option) (*fs.UploadSession, error) {
+	if req != nil && req.Props != nil {
+		ctx = m.ctxForShareWrite(ctx, req.Props.Uri)
+	}
 	return m.fs.PrepareUpload(ctx, req, opts...)
 }
 

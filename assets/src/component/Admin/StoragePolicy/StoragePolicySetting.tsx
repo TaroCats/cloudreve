@@ -21,6 +21,7 @@ import AddWizardDialog, { AddWizardProps } from "./AddWizardDialog";
 import SelectProvider from "./SelectProvider";
 import StoragePolicyCard from "./StoragePolicyCard";
 import CosWizard from "./Wizards/COS/CosWizard";
+import LoadBalanceWizard from "./Wizards/LoadBalance/LoadBalanceWizard";
 import LocalWizard from "./Wizards/Local/LocalWizard";
 import ObsWizard from "./Wizards/OBS/ObsWizard";
 import OneDriveWizard from "./Wizards/OneDrive/OneDriveWizard";
@@ -61,7 +62,6 @@ export interface PolicyProps {
   credentialDes?: React.ReactNode;
   corsExposedHeaders?: string[];
   endpointNotEnforcePrefix?: boolean;
-  pro?: boolean;
   regionCode?: string;
   regionCodeDes?: React.ReactNode;
 }
@@ -78,7 +78,7 @@ export const PolicyPropsMap: Record<PolicyType, PolicyProps> = {
     name: "policy.load_balance",
     img: "/static/img/lb.svg",
     wizardSize: "sm",
-    pro: true,
+    wizard: LoadBalanceWizard,
   },
   [PolicyType.remote]: {
     name: "policy.remote",

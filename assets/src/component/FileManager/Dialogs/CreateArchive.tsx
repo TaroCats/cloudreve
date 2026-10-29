@@ -3,6 +3,7 @@ import { useSnackbar } from "notistack";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { sendCreateArchive } from "../../../api/api.ts";
+import TaskNodeSelect from "./TaskNodeSelect.tsx";
 import { closeCreateArchiveDialog } from "../../../redux/globalStateSlice.ts";
 import { useAppDispatch, useAppSelector } from "../../../redux/hooks.ts";
 import { getFileLinkedUri } from "../../../util";
@@ -23,6 +24,7 @@ const CreateArchive = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [loading, setLoading] = useState(false);
   const [fileName, setFileName] = useState("archive.zip");
+  const [nodeId, setNodeId] = useState(0);
   const [path, setPath] = useState("");
 
   const open = useAppSelector((state) => state.globalState.createArchiveDialogOpen);
@@ -50,6 +52,7 @@ const CreateArchive = () => {
       sendCreateArchive({
         src: targets?.map((t) => getFileLinkedUri(t)),
         dst: dst.join(fileName).toString(),
+        node_id: nodeId || undefined,
       }),
     )
       .then(() => {
@@ -83,6 +86,7 @@ const CreateArchive = () => {
     >
       <DialogContent sx={{ pt: 1 }}>
         <Stack spacing={3}>
+          <TaskNodeSelect value={nodeId} onChange={setNodeId} />
           <OutlineIconTextField
             icon={<Archive />}
             variant="outlined"

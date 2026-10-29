@@ -52,6 +52,10 @@ export interface SiteConfig {
   thumb_exts?: string[];
   show_encryption_status?: boolean;
   full_text_search?: boolean;
+  /** Site announcement shown to signed-in users; empty disables it. */
+  announcement?: string;
+  /** Content hash; the dialog re-opens when this changes. */
+  announcement_hash?: string;
 }
 
 export interface CaptchaResponse {

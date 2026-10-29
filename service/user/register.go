@@ -10,11 +10,14 @@ import (
 	"github.com/cloudreve/Cloudreve/v4/ent"
 	"github.com/cloudreve/Cloudreve/v4/ent/user"
 	"github.com/cloudreve/Cloudreve/v4/inventory"
+	"github.com/cloudreve/Cloudreve/v4/inventory/types"
+	"github.com/cloudreve/Cloudreve/v4/pkg/audit"
 	"github.com/cloudreve/Cloudreve/v4/pkg/auth"
 	"github.com/cloudreve/Cloudreve/v4/pkg/cluster/routes"
 	"github.com/cloudreve/Cloudreve/v4/pkg/email"
 	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
 	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
+	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
 	"github.com/cloudreve/Cloudreve/v4/pkg/util"
 	"github.com/gin-gonic/gin"
 )
@@ -29,12 +32,67 @@ type UserRegisterService struct {
 	Language string `form:"language" json:"language"`
 }
 
+// validateRegisterEmail enforces email policies configured in admin settings:
+// sub-address rejection and domain allow/deny list. SSO sign-ins bypass these
+// checks by design (they never pass through registration).
+func validateRegisterEmail(ctx context.Context, settings setting.Provider, email string) error {
+	if settings.DisableSubAddressEmail(ctx) {
+		local := email
+		if at := strings.LastIndex(email, "@"); at > 0 {
+			local = email[:at]
+		}
+		if strings.Contains(local, "+") {
+			return serializer.NewError(serializer.CodeEmailProviderBaned, "Sub-addressed email is not allowed", nil)
+		}
+	}
+
+	filter := settings.EmailDomainFilter(ctx)
+	if filter.Mode == setting.EmailDomainFilterDisabled || len(filter.Domains) == 0 {
+		return nil
+	}
+
+	domain := ""
+	if at := strings.LastIndex(email, "@"); at >= 0 {
+		domain = strings.ToLower(email[at+1:])
+	}
+	if domain == "" {
+		return serializer.NewError(serializer.CodeEmailProviderBaned, "Invalid email domain", nil)
+	}
+
+	matched := false
+	for _, d := range filter.Domains {
+		d = strings.ToLower(strings.TrimSpace(strings.TrimPrefix(d, "@")))
+		if d == "" {
+			continue
+		}
+		if domain == d || strings.HasSuffix(domain, "."+d) {
+			matched = true
+			break
+		}
+	}
+
+	switch filter.Mode {
+	case setting.EmailDomainFilterWhitelist:
+		if !matched {
+			return serializer.NewError(serializer.CodeEmailProviderBaned, "Email domain is not in the allowed list", nil)
+		}
+	case setting.EmailDomainFilterBlacklist:
+		if matched {
+			return serializer.NewError(serializer.CodeEmailProviderBaned, "Email domain is not allowed", nil)
+		}
+	}
+	return nil
+}
+
 // Register 新用户注册
 func (service *UserRegisterService) Register(c *gin.Context) serializer.Response {
 	dep := dependency.FromContext(c)
 	settings := dep.SettingProvider()
 
 	isEmailRequired := settings.EmailActivationEnabled(c)
+	if err := validateRegisterEmail(c, settings, strings.ToLower(service.UserName)); err != nil {
+		return serializer.Err(c, err)
+	}
 	args := &inventory.NewUserArgs{
 		Email:         strings.ToLower(service.UserName),
 		PlainPassword: service.Password,
@@ -77,6 +135,11 @@ func (service *UserRegisterService) Register(c *gin.Context) serializer.Response
 	if err := inventory.Commit(tx); err != nil {
 		return serializer.DBErr(c, "Failed to commit user row", err)
 	}
+
+	// Seed default share shortcuts into the new user's root.
+	CreateDefaultSymbolics(c, dep, expectedUser)
+
+	audit.Log(c, types.AuditLogTypeUserSignup, map[string]string{"email": expectedUser.Email})
 
 	if isEmailRequired {
 		if err := sendActivationEmail(c, dep, expectedUser); err != nil {

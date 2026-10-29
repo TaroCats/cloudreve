@@ -118,7 +118,7 @@ func ExtractArchive(c *gin.Context) {
 // AnonymousPermLink 文件中转后的永久直链接
 func AnonymousPermLink(download bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		name := c.Param("name")
+		name := c.Param("path")
 		if err := explorer.RedirectDirectLink(c, name, download); err != nil {
 			c.JSON(404, serializer.Err(c, err))
 			c.Abort()

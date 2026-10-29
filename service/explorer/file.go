@@ -4,10 +4,14 @@ import (
 	"context"
 	"encoding/gob"
 	"fmt"
+	"html"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/cloudreve/Cloudreve/v4/application/dependency"
+	"github.com/cloudreve/Cloudreve/v4/ent"
 	"github.com/cloudreve/Cloudreve/v4/inventory"
 	"github.com/cloudreve/Cloudreve/v4/inventory/types"
 	"github.com/cloudreve/Cloudreve/v4/pkg/auth"
@@ -673,6 +677,10 @@ func (s *GetFileInfoService) Get(c *gin.Context) (*FileResponse, error) {
 	return BuildFileResponse(c, user, file, dep.HashIDEncoder(), nil), nil
 }
 
+// RedirectDirectLink serves a direct link. The first URL path segment is the
+// link's display name and is cosmetic; for folder links the remaining segments
+// address entries under the linked folder, so any content below the folder is
+// reachable through the link (the link itself acts as the capability).
 func RedirectDirectLink(c *gin.Context, name string, download bool) error {
 	dep := dependency.FromContext(c)
 	settings := dep.SettingProvider()
@@ -682,13 +690,25 @@ func RedirectDirectLink(c *gin.Context, name string, download bool) error {
 	ctx = context.WithValue(ctx, inventory.LoadFileEntity{}, true)
 	ctx = context.WithValue(ctx, inventory.LoadFileUser{}, true)
 	ctx = context.WithValue(ctx, inventory.LoadUserGroup{}, true)
-	dl, err := dep.DirectLinkClient().GetByNameID(ctx, sourceLinkID, name)
+	dl, err := dep.DirectLinkClient().GetByID(ctx, sourceLinkID)
 	if err != nil {
 		return serializer.NewError(serializer.CodeNotFound, "direct link not found", err)
 	}
 
 	m := manager.NewFileManager(dep, dl.Edges.File.Edges.Owner)
 	defer m.Recycle()
+
+	// Split the cosmetic name segment from the in-folder relative path.
+	rel := ""
+	if trimmed := strings.Trim(name, "/"); trimmed != "" {
+		if idx := strings.Index(trimmed, "/"); idx >= 0 {
+			rel = trimmed[idx+1:]
+		}
+	}
+
+	if dl.Edges.File.Type == int(types.FileTypeFolder) {
+		return serveFolderDirectLink(ctx, c, dep, m, dl, rel, download)
+	}
 
 	// Request entity URL
 	expire := time.Now().Add(settings.EntityUrlValidDuration(c))
@@ -703,6 +723,104 @@ func RedirectDirectLink(c *gin.Context, name string, download bool) error {
 	c.Redirect(http.StatusFound, res)
 	c.Header("Cache-Control", fmt.Sprintf("public, max-age=%d", int(earliestExpire.Sub(time.Now()).Seconds())))
 	return nil
+}
+
+// serveFolderDirectLink resolves rel under the linked folder and either
+// renders a minimal HTML index (folders) or redirects to the file's entity
+// URL (files). No permission checks apply: possession of the link grants
+// read access to the folder tree.
+func serveFolderDirectLink(ctx context.Context, c *gin.Context, dep dependency.Dep, m manager.FileManager,
+	dl *ent.DirectLink, rel string, download bool) error {
+	fc := dep.FileClient()
+
+	// Walk the relative path segment by segment; traversal tokens are dropped.
+	segments := make([]string, 0, 4)
+	for _, s := range strings.Split(rel, "/") {
+		if s == "" || s == "." || s == ".." {
+			continue
+		}
+		segments = append(segments, s)
+	}
+
+	current := dl.Edges.File
+	for _, s := range segments {
+		child, err := fc.GetChildFile(ctx, current, current.OwnerID, s, true)
+		if err != nil {
+			return serializer.NewError(serializer.CodeNotFound, "file not found", err)
+		}
+		current = child
+	}
+
+	if current.Type == int(types.FileTypeFolder) {
+		res, err := fc.GetChildFiles(ctx, &inventory.ListFileParameters{
+			PaginationArgs: &inventory.PaginationArgs{Page: 0, PageSize: 1000},
+		}, current.OwnerID, current)
+		if err != nil {
+			return serializer.NewError(serializer.CodeInternalSetting, "failed to list folder", err)
+		}
+		renderFolderIndex(c, dep, dl, segments, res.Files)
+		return nil
+	}
+
+	if current.PrimaryEntity <= 0 {
+		return serializer.NewError(serializer.CodeNotFound, "file has no content", nil)
+	}
+
+	settings := dep.SettingProvider()
+	expire := time.Now().Add(settings.EntityUrlValidDuration(ctx))
+	source, err := m.GetEntitySource(ctx, current.PrimaryEntity)
+	if err != nil {
+		return err
+	}
+	downloadUrl, err := source.Url(ctx,
+		entitysource.WithExpire(&expire),
+		entitysource.WithDownload(download),
+		entitysource.WithSpeedLimit(int64(dl.Speed)),
+		entitysource.WithDisplayName(current.Name),
+	)
+	if err != nil {
+		return err
+	}
+
+	c.Redirect(http.StatusFound, downloadUrl.Url)
+	c.Header("Cache-Control", fmt.Sprintf("public, max-age=%d", int(expire.Sub(time.Now()).Seconds())))
+	return nil
+}
+
+// renderFolderIndex writes a minimal self-contained HTML listing for a folder
+// direct link. Links are absolute (/f/<link>/<name>/<path>) so they work at
+// any nesting depth.
+func renderFolderIndex(c *gin.Context, dep dependency.Dep, dl *ent.DirectLink, segments []string, files []*ent.File) {
+	linkHash := hashid.EncodeSourceLinkID(dep.HashIDEncoder(), dl.ID)
+	prefix := "/f/" + linkHash + "/" + url.PathEscape(dl.Name)
+	for _, s := range segments {
+		prefix += "/" + url.PathEscape(s)
+	}
+
+	var b strings.Builder
+	b.WriteString("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">")
+	fmt.Fprintf(&b, "<title>%s</title></head><body>", html.EscapeString(dl.Name))
+	fmt.Fprintf(&b, "<h1>%s</h1><ul>", html.EscapeString(strings.Join(append([]string{dl.Name}, segments...), " / ")))
+	if len(segments) > 0 {
+		parent := "/f/" + linkHash + "/" + url.PathEscape(dl.Name)
+		if len(segments) > 1 {
+			for _, s := range segments[:len(segments)-1] {
+				parent += "/" + url.PathEscape(s)
+			}
+		}
+		fmt.Fprintf(&b, `<li><a href="%s">..</a></li>`, parent)
+	}
+	for _, f := range files {
+		href := prefix + "/" + url.PathEscape(f.Name)
+		name := html.EscapeString(f.Name)
+		if f.Type == int(types.FileTypeFolder) {
+			name += "/"
+		}
+		fmt.Fprintf(&b, `<li><a href="%s">%s</a></li>`, href, name)
+	}
+	b.WriteString("</ul></body></html>")
+
+	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(b.String()))
 }
 
 type (

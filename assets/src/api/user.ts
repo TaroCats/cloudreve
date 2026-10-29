@@ -36,6 +36,8 @@ export interface Group {
 export interface PinedFile {
   uri: string;
   name?: string;
+  /** Fixed pins come from group defaults and cannot be unpinned by users. */
+  fixed?: boolean;
 }
 
 export interface PrepareLoginResponse {
@@ -43,6 +45,8 @@ export interface PrepareLoginResponse {
   sso_enabled: boolean;
   password_enabled: boolean;
   qq_enabled: boolean;
+  /** When true, the sign-in page immediately starts the SSO flow. */
+  sso_direct_sign_in?: boolean;
 }
 
 export interface CaptchaRequest {
@@ -89,9 +93,14 @@ export const GroupPermission = {
   archive_task: 5,
   webdav_proxy: 6,
   share_download: 7,
+  migrate_policy: 8,
   remote_download: 9,
+  select_node: 10,
   redirected_source: 11,
   advance_delete: 12,
+  folder_direct_link: 13,
+  escalate_anonymity: 14,
+  set_anonymous_permission: 15,
   unique_direct_link: 17,
 };
 

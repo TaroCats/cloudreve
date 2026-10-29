@@ -44,20 +44,29 @@ func (f *DBFS) PreValidateUpload(ctx context.Context, dst *fs.URI, files ...fs.P
 	}
 
 	// Get parent folder storage policy and performs validation
-	policy, err := f.getPreferredPolicy(ctx, dstFile)
+	policy, _, err := f.resolvePolicyFor(ctx, dstFile)
+	if err != nil {
+		return err
+	}
+
+	// A load_balance policy may route uploads to any of its members, so the
+	// request must be valid for every member policy of the pool.
+	policies, err := f.effectivePoliciesForValidation(ctx, policy)
 	if err != nil {
 		return err
 	}
 
 	// validate upload request
-	for _, file := range files {
-		if file.OmitName {
-			if err := validateFileSize(file.Size, policy); err != nil {
-				return err
-			}
-		} else {
-			if err := validateNewFile(path.Base(file.Name), file.Size, policy); err != nil {
-				return err
+	for _, p := range policies {
+		for _, file := range files {
+			if file.OmitName {
+				if err := validateFileSize(file.Size, p); err != nil {
+					return err
+				}
+			} else {
+				if err := validateNewFile(path.Base(file.Name), file.Size, p); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -147,6 +156,14 @@ func (f *DBFS) PrepareUpload(ctx context.Context, req *fs.UploadRequest, opts ..
 	} else {
 		policy, err = f.getPreferredPolicy(ctx, ancestor)
 	}
+	if err != nil {
+		return nil, err
+	}
+
+	// A load_balance policy is virtual: pick the member policy that will
+	// physically store this upload. The entity records the selected member,
+	// so IO afterwards runs on the member's driver directly.
+	policy, err = f.resolveEffectivePolicy(ctx, policy, true)
 	if err != nil {
 		return nil, err
 	}

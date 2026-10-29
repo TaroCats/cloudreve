@@ -257,6 +257,10 @@ const (
 	CodeAnonymouseAccessDenied = 40088
 	// CodeInsufficientScope OAuth token scope insufficient
 	CodeInsufficientScope = 40089
+	// CodePolicyUsedByLoadBalance policy is referenced by a load balance policy
+	CodePolicyUsedByLoadBalance = 40090
+	// 操作过于频繁
+	CodeTooManyRequests = 40091
 	// CodeDBError 数据库操作失败
 	CodeDBError = 50001
 	// CodeEncryptError 加密失败

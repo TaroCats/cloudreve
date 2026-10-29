@@ -239,7 +239,12 @@ export const getActionOpt = (
     display.orCapability &&
     (currentUserAnonymous?.group?.direct_link_batch_size ?? 0) >= targets.length &&
     display.orCapability.enabled(NavigatorCapability.download_file);
-  display.showDirectLinkManagement = display.showDirectLink && targets.length == 1 && display.hasFile;
+  // Folder direct links require the dedicated group permission; file links
+  // follow the plain direct link gates.
+  display.showDirectLinkManagement =
+    display.showDirectLink &&
+    targets.length == 1 &&
+    (display.hasFile || (display.hasFolder && groupBs.enabled(GroupPermission.folder_direct_link)));
   display.showOpen =
     targets.length == 1 &&
     display.hasFile &&

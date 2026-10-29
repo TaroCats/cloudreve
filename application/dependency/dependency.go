@@ -92,6 +92,8 @@ type Dep interface {
 	DirectLinkClient() inventory.DirectLinkClient
 	// OAuthClientClient Creates a new inventory.OAuthClientClient instance for access DB OAuth client store.
 	OAuthClientClient() inventory.OAuthClientClient
+	// AuditLogClient Creates a new inventory.AuditLogClient instance for access DB audit log store.
+	AuditLogClient() inventory.AuditLogClient
 	// HashIDEncoder Get a singleton hashid.Encoder instance for encoding/decoding hashids.
 	HashIDEncoder() hashid.Encoder
 	// TokenAuth Get a singleton auth.TokenAuth instance for token authentication.
@@ -104,6 +106,8 @@ type Dep interface {
 	RequestClient(opts ...request.Option) request.Client
 	// ShareClient Creates a new inventory.ShareClient instance for access DB share store.
 	ShareClient() inventory.ShareClient
+	// AbuseReportClient Creates a new inventory.AbuseReportClient instance for access DB abuse report store.
+	AbuseReportClient() inventory.AbuseReportClient
 	// TaskClient Creates a new inventory.TaskClient instance for access DB task store.
 	TaskClient() inventory.TaskClient
 	// ForkWithLogger create a shallow copy of dependency with a new correlated logger, used as per-request dep.
@@ -160,6 +164,7 @@ type dependency struct {
 	settingClient         inventory.SettingClient
 	fileClient            inventory.FileClient
 	shareClient           inventory.ShareClient
+	abuseReportClient     inventory.AbuseReportClient
 	settingProvider       setting.Provider
 	userClient            inventory.UserClient
 	groupClient           inventory.GroupClient
@@ -168,6 +173,7 @@ type dependency struct {
 	nodeClient            inventory.NodeClient
 	davAccountClient      inventory.DavAccountClient
 	directLinkClient      inventory.DirectLinkClient
+	auditLogClient        inventory.AuditLogClient
 	fsEventClient         inventory.FsEventClient
 	oAuthClient           inventory.OAuthClientClient
 	emailClient           email.Driver
@@ -451,6 +457,15 @@ func (d *dependency) FsEventClient() inventory.FsEventClient {
 		return d.fsEventClient
 	}
 	return inventory.NewFsEventClient(d.DBClient(), d.ConfigProvider().Database().Type)
+}
+
+func (d *dependency) AuditLogClient() inventory.AuditLogClient {
+	if d.auditLogClient != nil {
+		return d.auditLogClient
+	}
+
+	d.auditLogClient = inventory.NewAuditLogClient(d.DBClient(), d.ConfigProvider().Database().Type)
+	return d.auditLogClient
 }
 
 func (d *dependency) SettingClient() inventory.SettingClient {
@@ -810,6 +825,14 @@ func (d *dependency) ShareClient() inventory.ShareClient {
 	}
 
 	return inventory.NewShareClient(d.DBClient(), d.ConfigProvider().Database().Type, d.HashIDEncoder())
+}
+
+func (d *dependency) AbuseReportClient() inventory.AbuseReportClient {
+	if d.abuseReportClient != nil {
+		return d.abuseReportClient
+	}
+
+	return inventory.NewAbuseReportClient(d.DBClient(), d.ConfigProvider().Database().Type, d.HashIDEncoder())
 }
 
 func (d *dependency) TaskClient() inventory.TaskClient {

@@ -66,6 +66,10 @@ export interface GroupSetting {
   default_policy_id?: number;
   /** Per-policy usage caps for members of this group, keyed by policy ID. */
   policy_quotas?: Record<number, number>;
+  /** Task processing node IDs members may use; empty means all nodes. */
+  allowed_nodes?: number[];
+  /** Share shortcuts force-pinned at the top of the sidebar. */
+  default_pinned?: { share_id: number; name?: string }[];
 }
 
 export interface AdminListGroupResponse {
@@ -249,6 +253,15 @@ export interface PolicySetting {
   qiniu_upload_cdn?: boolean;
   chunk_concurrency?: number;
   encryption?: boolean;
+  /** Member storage policies of a load_balance policy. */
+  policy_ids?: number[];
+  /** Selection strategy of a load_balance policy. */
+  strategy?: LoadBalanceStrategy;
+}
+
+export enum LoadBalanceStrategy {
+  round_robin = "round_robin",
+  least_used = "least_used",
 }
 
 export interface User extends CommonMixin {
@@ -306,11 +319,35 @@ export interface UserSetting {
 export interface PinedFile {
   uri: string;
   name?: string;
+  /** Fixed pins come from group defaults and cannot be unpinned by users. */
+  fixed?: boolean;
 }
 
 export interface ListStoragePolicyResponse {
   policies: StoragePolicy[];
   pagination: PaginationResults;
+}
+
+/** User-facing view of a storage policy bound to the caller's group. */
+export interface UserPolicy {
+  id: number;
+  hash_id: string;
+  name: string;
+}
+
+export interface UserPoliciesResponse {
+  policies: UserPolicy[];
+}
+
+/** User-facing view of a task processing node. */
+export interface UserNode {
+  id: number;
+  name: string;
+  capabilities?: string;
+}
+
+export interface UserNodesResponse {
+  nodes: UserNode[];
 }
 
 export interface AdminListService {
@@ -492,18 +529,17 @@ export interface LogEntry {
 }
 
 export interface AuditLog extends CommonMixin {
+  user_id?: number;
   type?: number;
-  correlation_id?: string;
+  detail?: Record<string, string>;
   ip?: string;
-  content?: LogEntry;
   edges: {
     user?: User;
-    file?: File;
-    entity?: Entity;
-    share?: Share;
   };
 
+  audit_hash_id?: string;
   user_hash_id?: string;
+  user_nick?: string;
 }
 
 export interface ListAuditLogResponse {
@@ -561,11 +597,35 @@ export interface Share extends CommonMixin {
   };
 
   user_hash_id?: string;
+  share_hash_id?: string;
   share_link?: string;
 }
 
 export interface ListShareResponse {
   shares: Share[];
+  pagination: PaginationResults;
+}
+
+export interface AbuseReport extends CommonMixin {
+  share_id?: number;
+  reporter_id?: number;
+  reason?: string;
+  edges: {
+    share?: Share;
+    reporter?: User;
+  };
+
+  share_hash_id?: string;
+  share_link?: string;
+  file_name?: string;
+  owner_hash_id?: string;
+  owner_name?: string;
+  reporter_hash_id?: string;
+  reporter_name?: string;
+}
+
+export interface ListAbuseReportResponse {
+  reports: AbuseReport[];
   pagination: PaginationResults;
 }
 

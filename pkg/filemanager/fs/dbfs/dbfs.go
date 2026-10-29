@@ -603,8 +603,14 @@ func (f *DBFS) createFile(ctx context.Context, parent *File, name string, fileTy
 	if o.preferredStoragePolicy != nil {
 		createFileArgs.StoragePolicyID = o.preferredStoragePolicy.ID
 	} else {
-		// get preferred storage policy
-		policy, err := f.getPreferredPolicy(ctx, parent)
+		// get preferred storage policy; a load_balance policy is resolved to
+		// one concrete member policy which will hold the entity.
+		policy, _, err := f.resolvePolicyFor(ctx, parent)
+		if err != nil {
+			return nil, err
+		}
+
+		policy, err = f.resolveEffectivePolicy(ctx, policy, true)
 		if err != nil {
 			return nil, err
 		}
@@ -721,9 +727,15 @@ func (f *DBFS) resolvePolicyFor(ctx context.Context, file *File) (*ent.StoragePo
 }
 
 // getPreferredPolicy returns the policy a new file under `file` should use.
+// Virtual load_balance policies are dereferenced to the member policy that
+// would be selected next, without advancing the round-robin cursor.
 func (f *DBFS) getPreferredPolicy(ctx context.Context, file *File) (*ent.StoragePolicy, error) {
 	policy, _, err := f.resolvePolicyFor(ctx, file)
-	return policy, err
+	if err != nil {
+		return nil, err
+	}
+
+	return f.resolveEffectivePolicy(ctx, policy, false)
 }
 
 // validatePolicyQuota checks the group's per-policy quota for the owner.

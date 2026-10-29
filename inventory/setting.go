@@ -533,6 +533,16 @@ var DefaultSettings = map[string]string{
 	"cron_trash_bin_collect":                     "@every 33m",
 	"cron_oauth_cred_refresh":                    "@every 230h",
 	"authn_enabled":                              "1",
+	"audit_log_enabled":                          "false",
+	"audit_log_types":                            "[]",
+	"oidc_enabled":                               "0",
+	"oidc_issuer":                                "",
+	"oidc_client_id":                             "",
+	"oidc_client_secret":                         "",
+	"oidc_direct_sign_in":                        "0",
+	"qq_enabled":                                 "0",
+	"qq_app_id":                                  "",
+	"qq_app_secret":                              "",
 	"captcha_type":                               "normal",
 	"captcha_height":                             "60",
 	"captcha_width":                              "240",
@@ -751,6 +761,26 @@ func init() {
 		panic(err)
 	}
 	DefaultSettings["mail_reset_template"] = string(mailResetTemplates)
+
+	quotaMails := []map[string]string{
+		{
+			"language": "zh-CN",
+			"title":    "[{{ .CommonContext.SiteBasic.Name }}] 存储空间已超出配额",
+			"body":     "<p>{{ .User.Nick }}，你好：</p><p>你的存储空间使用量已超出当前配额，请及时清理文件或联系管理员扩容。</p>",
+		},
+		{
+			"language": "en-US",
+			"title":    "[{{ .CommonContext.SiteBasic.Name }}] Storage quota exceeded",
+			"body":     "<p>Hi {{ .User.Nick }},</p><p>Your storage usage has exceeded your quota. Please clean up files or contact the administrator for more space.</p>",
+		},
+	}
+	mailQuotaTemplates, err := json.Marshal(quotaMails)
+	if err != nil {
+		panic(err)
+	}
+	DefaultSettings["mail_exceed_quota_template"] = string(mailQuotaTemplates)
+	// Quota notification stays off until explicitly scheduled.
+	DefaultSettings["cron_quota_notify"] = ""
 
 	key := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {

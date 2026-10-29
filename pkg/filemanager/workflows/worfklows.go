@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/cloudreve/Cloudreve/v4/application/dependency"
+	"github.com/cloudreve/Cloudreve/v4/ent"
 	"github.com/cloudreve/Cloudreve/v4/inventory/types"
 	"github.com/cloudreve/Cloudreve/v4/pkg/cluster"
 	"github.com/cloudreve/Cloudreve/v4/pkg/queue"
@@ -25,14 +26,22 @@ type NodeState struct {
 	progress queue.Progresses
 }
 
-// allocateNode allocates a node for the task.
-func allocateNode(ctx context.Context, dep dependency.Dep, state *NodeState, capability types.NodeCapability) (cluster.Node, error) {
+// allocateNode allocates a node for the task. When the owner's group
+// restricts AllowedNodes, selection is limited to that subset.
+func allocateNode(ctx context.Context, dep dependency.Dep, state *NodeState, capability types.NodeCapability, owner *ent.User) (cluster.Node, error) {
 	np, err := dep.NodePool(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get node pool: %w", err)
 	}
 
-	node, err := np.Get(ctx, capability, state.NodeID)
+	var allowed []int
+	if owner != nil && owner.GroupUsers > 0 {
+		if g, err := dep.GroupClient().GetByID(ctx, owner.GroupUsers); err == nil {
+			allowed = g.Settings.AllowedNodes
+		}
+	}
+
+	node, err := np.Get(ctx, capability, state.NodeID, allowed)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get node: %w", err)
 	}

@@ -5,6 +5,8 @@ package runtime
 import (
 	"time"
 
+	"github.com/cloudreve/Cloudreve/v4/ent/abusereport"
+	"github.com/cloudreve/Cloudreve/v4/ent/auditlog"
 	"github.com/cloudreve/Cloudreve/v4/ent/davaccount"
 	"github.com/cloudreve/Cloudreve/v4/ent/directlink"
 	"github.com/cloudreve/Cloudreve/v4/ent/entity"
@@ -29,6 +31,44 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	abusereportMixin := schema.AbuseReport{}.Mixin()
+	abusereportMixinHooks0 := abusereportMixin[0].Hooks()
+	abusereport.Hooks[0] = abusereportMixinHooks0[0]
+	abusereportMixinInters0 := abusereportMixin[0].Interceptors()
+	abusereport.Interceptors[0] = abusereportMixinInters0[0]
+	abusereportMixinFields0 := abusereportMixin[0].Fields()
+	_ = abusereportMixinFields0
+	abusereportFields := schema.AbuseReport{}.Fields()
+	_ = abusereportFields
+	// abusereportDescCreatedAt is the schema descriptor for created_at field.
+	abusereportDescCreatedAt := abusereportMixinFields0[0].Descriptor()
+	// abusereport.DefaultCreatedAt holds the default value on creation for the created_at field.
+	abusereport.DefaultCreatedAt = abusereportDescCreatedAt.Default.(func() time.Time)
+	// abusereportDescUpdatedAt is the schema descriptor for updated_at field.
+	abusereportDescUpdatedAt := abusereportMixinFields0[1].Descriptor()
+	// abusereport.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	abusereport.DefaultUpdatedAt = abusereportDescUpdatedAt.Default.(func() time.Time)
+	// abusereport.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	abusereport.UpdateDefaultUpdatedAt = abusereportDescUpdatedAt.UpdateDefault.(func() time.Time)
+	auditlogMixin := schema.AuditLog{}.Mixin()
+	auditlogMixinHooks0 := auditlogMixin[0].Hooks()
+	auditlog.Hooks[0] = auditlogMixinHooks0[0]
+	auditlogMixinInters0 := auditlogMixin[0].Interceptors()
+	auditlog.Interceptors[0] = auditlogMixinInters0[0]
+	auditlogMixinFields0 := auditlogMixin[0].Fields()
+	_ = auditlogMixinFields0
+	auditlogFields := schema.AuditLog{}.Fields()
+	_ = auditlogFields
+	// auditlogDescCreatedAt is the schema descriptor for created_at field.
+	auditlogDescCreatedAt := auditlogMixinFields0[0].Descriptor()
+	// auditlog.DefaultCreatedAt holds the default value on creation for the created_at field.
+	auditlog.DefaultCreatedAt = auditlogDescCreatedAt.Default.(func() time.Time)
+	// auditlogDescUpdatedAt is the schema descriptor for updated_at field.
+	auditlogDescUpdatedAt := auditlogMixinFields0[1].Descriptor()
+	// auditlog.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	auditlog.DefaultUpdatedAt = auditlogDescUpdatedAt.Default.(func() time.Time)
+	// auditlog.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	auditlog.UpdateDefaultUpdatedAt = auditlogDescUpdatedAt.UpdateDefault.(func() time.Time)
 	davaccountMixin := schema.DavAccount{}.Mixin()
 	davaccountMixinHooks0 := davaccountMixin[0].Hooks()
 	davaccount.Hooks[0] = davaccountMixinHooks0[0]

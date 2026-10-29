@@ -39,11 +39,9 @@ import HomeIcon from "../../Icons/Home.tsx";
 import OpenFilled from "../../Icons/OpenFilled.tsx";
 import PeopleFilled from "../../Icons/PeopleFilled.tsx";
 import ShareFilled from "../../Icons/ShareFilled.tsx";
-import SparkleFilled from "../../Icons/SparkleFilled.tsx";
 import Telegram from "../../Icons/Telegram.tsx";
 import PageContainer from "../../Pages/PageContainer.tsx";
 import PageHeader from "../../Pages/PageHeader.tsx";
-import ProDialog from "../Common/ProDialog.tsx";
 import SiteUrlWarning from "./SiteUrlWarning.tsx";
 import CommentMultiple from "../../Icons/CommentMultiple.tsx";
 
@@ -64,7 +62,6 @@ const Home = () => {
   const [summary, setSummary] = useState<HomepageSummary | undefined>();
   const [chartLoading, setChartLoading] = useState(false);
   const [siteUrlWarning, setSiteUrlWarning] = useState(false);
-  const [proDialogOpen, setProDialogOpen] = useState(false);
   useEffect(() => {
     loadSummary(false);
   }, []);
@@ -90,7 +87,6 @@ const Home = () => {
 
   return (
     <PageContainer>
-      <ProDialog open={proDialogOpen} onClose={() => setProDialogOpen(false)} />
       <SiteUrlWarning
         open={siteUrlWarning}
         onClose={() => setSiteUrlWarning(false)}
@@ -383,14 +379,6 @@ const Home = () => {
                     <OpenFilled />
                   </StyledListItemIcon>
                 </ListItemButton>
-                {summary && !summary.version.pro && (
-                  <ListItemButton onClick={() => setProDialogOpen(true)}>
-                    <ListItemIcon>
-                      <SparkleFilled color={"primary"} />
-                    </ListItemIcon>
-                    <ListItemText primary={t("summary.buyPro")} />
-                  </ListItemButton>
-                )}
               </List>
               <Divider />
             </StyledPaper>

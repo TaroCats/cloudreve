@@ -95,9 +95,10 @@ func (s *AdminListService) Shares(c *gin.Context) (*ListShareResponse, error) {
 			shareLink = routes.MasterShareUrl(siteUrl, hashid.EncodeShareID(hasher, share.ID), share.Password).String()
 
 			return GetShareResponse{
-				Share:      share,
-				UserHashID: uid,
-				ShareLink:  shareLink,
+				Share:       share,
+				UserHashID:  uid,
+				ShareHashID: hashid.EncodeShareID(hasher, share.ID),
+				ShareLink:   shareLink,
 			}
 		}),
 	}, nil
@@ -136,9 +137,10 @@ func (s *SingleShareService) Get(c *gin.Context) (*GetShareResponse, error) {
 	shareLink = routes.MasterShareUrl(siteUrl, hashid.EncodeShareID(hasher, share.ID), share.Password).String()
 
 	return &GetShareResponse{
-		Share:      share,
-		UserHashID: uid,
-		ShareLink:  shareLink,
+		Share:       share,
+		UserHashID:  uid,
+		ShareHashID: hashid.EncodeShareID(hasher, share.ID),
+		ShareLink:   shareLink,
 	}, nil
 }
 
