@@ -665,20 +665,97 @@ func (f *DBFS) generateEncryptMetadata(ctx context.Context, uploadRequest *fs.Up
 	return nil, nil
 }
 
-// getPreferredPolicy tries to get the preferred storage policy for the given file.
-func (f *DBFS) getPreferredPolicy(ctx context.Context, file *File) (*ent.StoragePolicy, error) {
+// resolvePolicyFor walks the resolution chain for the target file:
+//
+//  1. Explicit upload request override (already validated by caller)
+//  2. Nearest ancestor folder with a policy binding
+//  3. Group default policy
+//  4. First policy bound to the group
+//
+// It returns the resolved policy together with the full candidate set of the
+// owner's group, so callers can validate explicit overrides against it.
+func (f *DBFS) resolvePolicyFor(ctx context.Context, file *File) (*ent.StoragePolicy, []*ent.StoragePolicy, error) {
 	ownerGroup := file.Owner().Edges.Group
 	if ownerGroup == nil {
-		return nil, fmt.Errorf("owner group not loaded")
+		return nil, nil, fmt.Errorf("owner group not loaded")
 	}
 
 	sc, _ := inventory.InheritTx(ctx, f.storagePolicyClient)
-	groupPolicy, err := sc.GetByGroup(ctx, ownerGroup)
+	candidates, err := sc.ListByGroup(ctx, ownerGroup)
 	if err != nil {
-		return nil, serializer.NewError(serializer.CodeDBError, "Failed to get available storage policies", err)
+		return nil, nil, serializer.NewError(serializer.CodeDBError, "Failed to get available storage policies", err)
 	}
 
-	return groupPolicy, nil
+	if len(candidates) == 0 {
+		return nil, nil, serializer.NewError(serializer.CodePolicyNotExist,
+			"User group has no storage policy bound", nil)
+	}
+
+	byID := make(map[int]*ent.StoragePolicy, len(candidates))
+	for _, p := range candidates {
+		byID[p.ID] = p
+	}
+
+	// 2. Nearest ancestor folder with an explicit binding wins.
+	for _, ancestor := range file.AncestorsChain() {
+		if ancestor.Model.Props == nil || ancestor.Model.Props.BoundPolicyID == 0 {
+			continue
+		}
+
+		if p, ok := byID[ancestor.Model.Props.BoundPolicyID]; ok {
+			return p, candidates, nil
+		}
+		// Stale binding pointing outside the group: fall through to default.
+		break
+	}
+
+	// 3. Group default policy.
+	if id := ownerGroup.Settings.DefaultPolicyID; id > 0 {
+		if p, ok := byID[id]; ok {
+			return p, candidates, nil
+		}
+	}
+
+	// 4. First bound policy as last resort.
+	return candidates[0], candidates, nil
+}
+
+// getPreferredPolicy returns the policy a new file under `file` should use.
+func (f *DBFS) getPreferredPolicy(ctx context.Context, file *File) (*ent.StoragePolicy, error) {
+	policy, _, err := f.resolvePolicyFor(ctx, file)
+	return policy, err
+}
+
+// validatePolicyQuota checks the group's per-policy quota for the owner.
+// A quota of 0 (or unset) means the policy only falls back to the group-wide
+// MaxStorage limit, which is enforced separately.
+func (f *DBFS) validatePolicyQuota(ctx context.Context, owner *ent.User, policy *ent.StoragePolicy, incoming int64) error {
+	if incoming <= 0 {
+		return nil
+	}
+
+	ownerGroup := owner.Edges.Group
+	if ownerGroup == nil || ownerGroup.Settings == nil {
+		return nil
+	}
+
+	quota, ok := ownerGroup.Settings.PolicyQuotas[policy.ID]
+	if !ok || quota <= 0 {
+		return nil
+	}
+
+	used, err := f.fileClient.SumEntitySizeByOwnerAndPolicy(ctx, owner.ID, policy.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get policy usage: %w", err)
+	}
+
+	if used+incoming > quota {
+		return fs.ErrInsufficientCapacity.WithError(fmt.Errorf(
+			"storage policy %q quota exceeded: used %d, quota %d, incoming %d",
+			policy.Name, used, quota, incoming))
+	}
+
+	return nil
 }
 
 func (f *DBFS) getFileByPath(ctx context.Context, navigator Navigator, path *fs.URI) (*File, error) {

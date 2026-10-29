@@ -81,6 +81,9 @@ type (
 		GetStorageDriver(ctx context.Context, policy *ent.StoragePolicy) (driver.Handler, error)
 		// PatchView patches the view setting of a file
 		PatchView(ctx context.Context, uri *fs.URI, view *types.ExplorerView) error
+		// PatchPolicyBinding binds or unbinds a storage policy on a folder.
+		// Children created under the folder inherit the bound policy.
+		PatchPolicyBinding(ctx context.Context, uri *fs.URI, policyID int) error
 	}
 
 	ShareManagement interface {

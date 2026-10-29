@@ -75,7 +75,11 @@ func (m *Migrator) migrateGroup() error {
 			SetSettings(newOpts)
 
 		if len(policies) > 0 {
-			stm.SetStoragePoliciesID(policies[0])
+			// v3 groups hold a single policy; migrate it as the sole binding
+			// and mark it as the group default.
+			stm.AddStoragePolicyIDs(policies...)
+			newOpts.DefaultPolicyID = policies[0]
+			stm.SetSettings(newOpts)
 		}
 
 		if _, err := stm.Save(context.Background()); err != nil {

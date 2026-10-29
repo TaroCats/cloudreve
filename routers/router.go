@@ -771,6 +771,13 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 				controllers.FromJSON[explorer.RebuildFTSIndexWorkflowService](explorer.CreateRebuildFTSIndexParamCtx{}),
 				controllers.RebuildFTSIndex,
 			)
+			// Create task to migrate entities between storage policies
+			wf.POST("migratePolicy",
+				middleware.IsAdmin(),
+				middleware.RequiredScopes(types.ScopeWorkflowWrite, types.ScopeAdminWrite),
+				controllers.FromJSON[explorer.MigratePolicyWorkflowService](explorer.CreateMigratePolicyParamCtx{}),
+				controllers.MigratePolicy,
+			)
 
 			// 取得文件外链
 			source := file.Group("source")
@@ -790,6 +797,13 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 				middleware.RequiredScopes(types.ScopeFilesWrite),
 				controllers.FromJSON[explorer.PatchViewService](explorer.PatchViewParameterCtx{}),
 				controllers.PatchView,
+			)
+
+			// Bind/unbind storage policy on a folder
+			file.PATCH("policyBinding",
+				middleware.RequiredScopes(types.ScopeFilesWrite),
+				controllers.FromJSON[explorer.PatchPolicyBindingService](explorer.PatchPolicyBindingParamCtx{}),
+				controllers.PatchPolicyBinding,
 			)
 
 			// Server event push

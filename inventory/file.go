@@ -220,6 +220,11 @@ type FileClient interface {
 	CountEntityByTimeRange(ctx context.Context, start, end *time.Time) (int, error)
 	// CountEntityByStoragePolicyID counts entities by storage policy ID
 	CountEntityByStoragePolicyID(ctx context.Context, storagePolicyID int) (int, int, error)
+	// SumEntitySizeByOwnerAndPolicy returns total bytes a user occupies on a policy
+	SumEntitySizeByOwnerAndPolicy(ctx context.Context, ownerID, policyID int) (int64, error)
+	// UpdateEntityPolicy repoints an entity to another storage policy, optionally
+	// with a new physical save path. Used by cross-policy migration.
+	UpdateEntityPolicy(ctx context.Context, entity *ent.Entity, policyID int, source string) error
 	// IsStoragePolicyUsedByEntities checks if a storage policy is used by entities
 	IsStoragePolicyUsedByEntities(ctx context.Context, policyID int) (bool, error)
 	// DeleteByUser deletes all files by a given user
@@ -375,6 +380,41 @@ func (f *fileClient) CountEntityByStoragePolicyID(ctx context.Context, storagePo
 	}
 
 	return v[0].Count, v[0].Sum, nil
+}
+
+// SumEntitySizeByOwnerAndPolicy returns total bytes a user occupies on the
+// given storage policy. Used for per-policy quota accounting.
+func (f *fileClient) SumEntitySizeByOwnerAndPolicy(ctx context.Context, ownerID, policyID int) (int64, error) {
+	var v []struct {
+		Sum int64 `json:"sum"`
+	}
+
+	err := f.client.Entity.Query().
+		Where(
+			entity.CreatedBy(ownerID),
+			entity.StoragePolicyEntities(policyID),
+		).
+		Aggregate(ent.Sum(entity.FieldSize)).
+		Scan(ctx, &v)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(v) == 0 {
+		return 0, nil
+	}
+
+	return v[0].Sum, nil
+}
+
+// UpdateEntityPolicy repoints an entity to another storage policy. When source
+// is non-empty the physical save path is updated too.
+func (f *fileClient) UpdateEntityPolicy(ctx context.Context, e *ent.Entity, policyID int, source string) error {
+	stm := f.client.Entity.UpdateOne(e).SetStoragePolicyEntities(policyID)
+	if source != "" {
+		stm = stm.SetSource(source)
+	}
+	return stm.Exec(ctx)
 }
 
 func (f *fileClient) CreateDirectLink(ctx context.Context, file int, name string, speed int, reuse bool) (*ent.DirectLink, error) {

@@ -48,6 +48,43 @@ func (f *DBFS) PatchProps(ctx context.Context, uri *fs.URI, props *types.FilePro
 		}
 	}
 
+	// Directory-level storage policy binding. Only folders may be bound,
+	// and the target policy must be one of the owner group's policies.
+	if props.BoundPolicyID > 0 || (delete && props.BoundPolicyID > 0) {
+		if target.Type() != types.FileTypeFolder {
+			return fs.ErrNotSupportedAction.WithError(fmt.Errorf("only folders can bind a storage policy"))
+		}
+
+		if !delete {
+			ownerGroup := target.Owner().Edges.Group
+			if ownerGroup == nil {
+				return fmt.Errorf("owner group not loaded")
+			}
+
+			sc, _ := inventory.InheritTx(ctx, f.storagePolicyClient)
+			candidates, err := sc.ListByGroup(ctx, ownerGroup)
+			if err != nil {
+				return serializer.NewError(serializer.CodeDBError, "Failed to get available storage policies", err)
+			}
+
+			var allowed bool
+			for _, p := range candidates {
+				if p.ID == props.BoundPolicyID {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				return serializer.NewError(serializer.CodePolicyNotAllowed,
+					"Storage policy is not available to your group", nil)
+			}
+
+			currentProps.BoundPolicyID = props.BoundPolicyID
+		} else {
+			currentProps.BoundPolicyID = 0
+		}
+	}
+
 	if _, err := f.fileClient.UpdateProps(ctx, target.Model, currentProps); err != nil {
 		return serializer.NewError(serializer.CodeDBError, "failed to update file props", err)
 	}

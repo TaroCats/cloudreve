@@ -732,6 +732,34 @@ func (s *PatchViewService) Patch(c *gin.Context) error {
 }
 
 type (
+	PatchPolicyBindingParamCtx struct{}
+	PatchPolicyBindingService  struct {
+		Uri      string `json:"uri" binding:"required"`
+		PolicyID int    `json:"policy_id"`
+	}
+)
+
+// Patch binds or unbinds a storage policy on a folder. Passing policy_id = 0
+// removes the binding so the folder falls back to the group default.
+func (s *PatchPolicyBindingService) Patch(c *gin.Context) error {
+	dep := dependency.FromContext(c)
+	user := inventory.UserFromContext(c)
+	m := manager.NewFileManager(dep, user)
+	defer m.Recycle()
+
+	uri, err := fs.NewUriFromString(s.Uri)
+	if err != nil {
+		return serializer.NewError(serializer.CodeParamErr, "unknown uri", err)
+	}
+
+	if err := m.PatchPolicyBinding(c, uri, s.PolicyID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type (
 	ArchiveListFilesParamCtx struct{}
 	ArchiveListFilesService  struct {
 		Uri          string `form:"uri" binding:"required"`

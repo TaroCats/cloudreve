@@ -1,0 +1,331 @@
+# 构建并分发 Cloudreve 容器镜像（多架构矩阵）。
+#
+# 流水线：
+#   meta ──┬─> frontend (bun 打包 assets.zip)
+#          └─> image[amd64] ─┐
+#              image[arm64] ─┴─> manifest (合并多架构清单并推送 GHCR)
+#
+# 设计取舍：
+#   - 用 matrix 并行编译两架构，比单 job 里 buildx 顺序构建快一倍以上，
+#     且不需要 QEMU 模拟 Go 编译（交叉编译是原生速度）。
+#   - 前端产物用 artifact 传给下游 job，避免每个架构重复打包 35s 的 vite 构建。
+#   - Dockerfile 里是 `COPY cloudreve ./cloudreve`（预编译二进制），
+#     所以每个架构 job 必须先编出对应架构的二进制再 docker build。
+#
+# 产物标签（GHCR）：
+#   ghcr.io/<owner>/<repo>:<version>        多架构清单
+#   ghcr.io/<owner>/<repo>:v<major>         大版本别名
+#   ghcr.io/<owner>/<repo>:latest           仅默认分支/发布时
+#   ghcr.io/<owner>/<repo>:sha-<short>      每次构建都打，可精确回溯
+#   ghcr.io/<owner>/<repo>:<version>-<arch> 单架构（调试用，也供 manifest 引用）
+
+name: Build & Publish Images
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  # 手动构建：可指定版本号；留空则按 ref 推导
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号（如 4.15.0）。留空则用 git ref 推导"
+        required: false
+        type: string
+      publish_latest:
+        description: "同时推送 :latest 标签"
+        required: false
+        type: boolean
+        default: true
+  # 供「upstream 同步检测」工作流触发重建
+  repository_dispatch:
+    types: [upstream-update]
+  # 夜间重建：自动吸收基础镜像的安全更新
+  schedule:
+    - cron: "17 2 * * *"
+
+# 同一分支/标签的新推送取消旧构建，避免排队浪费 runner
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  # 与 go.mod / azure-pipelines.yml 保持一致
+  GO_VERSION: "1.26.5"
+  BUN_VERSION: "1.3.14"
+
+jobs:
+  # ────────────────────────────────────────────────────────────
+  # 1. 解析版本与镜像名，下游 job 直接引用，避免各处重复推导
+  # ────────────────────────────────────────────────────────────
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.vars.outputs.version }}
+      major: ${{ steps.vars.outputs.major }}
+      short_sha: ${{ steps.vars.outputs.short_sha }}
+      image: ${{ steps.vars.outputs.image }}
+      push_latest: ${{ steps.vars.outputs.push_latest }}
+      is_release: ${{ steps.vars.outputs.is_release }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Derive build variables
+        id: vars
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_PUBLISH_LATEST: ${{ inputs.publish_latest }}
+        run: |
+          set -euo pipefail
+
+          short_sha="$(git rev-parse --short=7 HEAD)"
+          echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
+
+          # 优先级：手动输入 > git 标签 > sha 快照
+          if [ -n "${INPUT_VERSION:-}" ]; then
+            version="${INPUT_VERSION}"
+            is_release=true
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            is_release=true
+          else
+            version="0.0.0-${short_sha}"
+            is_release=false
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+          # 大版本别名，例如 4.15.0 -> v4
+          major="v${version%%.*}"
+          echo "major=${major}" >> "$GITHUB_OUTPUT"
+
+          # GHCR 要求镜像名全小写
+          image="${REGISTRY}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+
+          # latest 只在发布或显式开启时推送，避免 nightly 覆盖稳定版
+          if [ "${is_release}" = "true" ] && [ "${INPUT_PUBLISH_LATEST:-true}" = "true" ]; then
+            echo "push_latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push_latest=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "::notice::Build version=${version} major=${major} sha=${short_sha} release=${is_release}"
+
+  # ────────────────────────────────────────────────────────────
+  # 2. 前端打包：bun 构建 vite 产物并压成 assets.zip
+  #    Go 侧通过 //go:embed assets.zip 内嵌，故必须先于二进制编译
+  # ────────────────────────────────────────────────────────────
+  frontend:
+    runs-on: ubuntu-latest
+    needs: meta
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            assets/node_modules
+          key: bun-${{ runner.os }}-${{ hashFiles('assets/bun.lockb', 'assets/bun.lock', 'assets/package.json') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Build frontend and package assets.zip
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          chmod +x .build/build-assets.sh
+          # 只有正式发布才回写 package.json 版本号，nightly 保持不变
+          if [ "${{ needs.meta.outputs.is_release }}" = "true" ]; then
+            bash .build/build-assets.sh "${VERSION}"
+          else
+            bash .build/build-assets.sh
+          fi
+
+      - name: Upload assets.zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: assets-zip
+          path: application/statics/assets.zip
+          if-no-files-found: error
+          retention-days: 3
+
+  # ────────────────────────────────────────────────────────────
+  # 3. 按架构交叉编译 Go 二进制 + 构建并推送单架构镜像
+  #    矩阵并行：amd64 / arm64 各自独立，互不阻塞
+  # ────────────────────────────────────────────────────────────
+  image:
+    runs-on: ubuntu-latest
+    needs: [meta, frontend]
+    strategy:
+      # 单架构失败不影响另一个架构产出，便于定位是工具链还是代码问题
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: amd64
+            platform: linux/amd64
+            arch: amd64
+          - goarch: arm64
+            platform: linux/arm64
+            arch: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download assets.zip
+        uses: actions/download-artifact@v4
+        with:
+          name: assets-zip
+          path: application/statics
+
+      - name: Verify assets.zip is embedded-able
+        run: |
+          set -euo pipefail
+          test -f application/statics/assets.zip
+          echo "assets.zip size: $(du -h application/statics/assets.zip | cut -f1)"
+          unzip -l application/statics/assets.zip | head -5
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: Build cloudreve binary (${{ matrix.goarch }})
+        env:
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ needs.meta.outputs.version }}
+          SHORT_SHA: ${{ needs.meta.outputs.short_sha }}
+        run: |
+          set -euo pipefail
+          # CGO 关闭 + 静态链接，产物可直接跑在 alpine 上
+          CGO_ENABLED=0 GOOS=linux GOARCH="${GOARCH}" \
+          go build \
+            -trimpath \
+            -ldflags "-s -w \
+              -X github.com/cloudreve/Cloudreve/v4/application/constants.BackendVersion=${VERSION} \
+              -X github.com/cloudreve/Cloudreve/v4/application/constants.LastCommit=${SHORT_SHA}" \
+            -o cloudreve \
+            .
+          echo "binary: $(file cloudreve | cut -d: -f2)"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ needs.meta.outputs.image }}
+          # 单架构标签：<version>-<arch>，供 manifest 合并引用
+          tags: |
+            type=raw,value=${{ needs.meta.outputs.version }}-${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.title=Cloudreve
+            org.opencontainers.image.description=Cloudreve self-hosted file management (multi-arch)
+            org.opencontainers.image.vendor=TaroCats
+
+      - name: Build and push (${{ matrix.platform }})
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # 二进制是预编译产物，无需 build cache
+          no-cache: false
+          provenance: false
+
+  # ────────────────────────────────────────────────────────────
+  # 4. 合并多架构清单：单架构标签 -> 多架构 manifest
+  #    docker buildx imagetools 只做清单合并，不重新构建，秒级完成
+  # ────────────────────────────────────────────────────────────
+  manifest:
+    runs-on: ubuntu-latest
+    needs: [meta, image]
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push multi-arch manifests
+        env:
+          IMAGE: ${{ needs.meta.outputs.image }}
+          VERSION: ${{ needs.meta.outputs.version }}
+          MAJOR: ${{ needs.meta.outputs.major }}
+          PUSH_LATEST: ${{ needs.meta.outputs.push_latest }}
+          IS_RELEASE: ${{ needs.meta.outputs.is_release }}
+        run: |
+          set -euo pipefail
+
+          src=("${IMAGE}:${VERSION}-amd64" "${IMAGE}:${VERSION}-arm64")
+
+          # 版本号清单：始终推送
+          echo "==> manifest ${IMAGE}:${VERSION}"
+          docker buildx imagetools create -t "${IMAGE}:${VERSION}" "${src[@]}"
+
+          # 大版本别名：仅正式发布时滚动更新
+          if [ "${IS_RELEASE}" = "true" ]; then
+            echo "==> manifest ${IMAGE}:${MAJOR}"
+            docker buildx imagetools create -t "${IMAGE}:${MAJOR}" "${src[@]}"
+          fi
+
+          # latest：可关闭
+          if [ "${PUSH_LATEST}" = "true" ]; then
+            echo "==> manifest ${IMAGE}:latest"
+            docker buildx imagetools create -t "${IMAGE}:latest" "${src[@]}"
+          fi
+
+      - name: Summary
+        env:
+          IMAGE: ${{ needs.meta.outputs.image }}
+          VERSION: ${{ needs.meta.outputs.version }}
+          MAJOR: ${{ needs.meta.outputs.major }}
+          PUSH_LATEST: ${{ needs.meta.outputs.push_latest }}
+        run: |
+          {
+            echo "## 镜像已发布"
+            echo ""
+            echo '```'
+            echo "docker pull ${IMAGE}:${VERSION}"
+            echo '```'
+            echo ""
+            echo "| 标签 | 说明 |"
+            echo "| --- | --- |"
+            echo "| \`${IMAGE}:${VERSION}\` | 多架构（amd64 + arm64） |"
+            echo "| \`${IMAGE}:${MAJOR}\` | 大版本别名 |"
+            if [ "${PUSH_LATEST}" = "true" ]; then
+              echo "| \`${IMAGE}:latest\` | 最新稳定 |"
+            fi
+            echo ""
+            echo "单架构调试标签：\`${IMAGE}:${VERSION}-amd64\` / \`${IMAGE}:${VERSION}-arm64\`"
+          } >> "$GITHUB_STEP_SUMMARY"

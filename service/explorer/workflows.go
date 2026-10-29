@@ -481,3 +481,47 @@ func (service *RebuildFTSIndexWorkflowService) CreateRebuildFTSIndexTask(c *gin.
 
 	return BuildTaskResponse(t, nil, hasher), nil
 }
+
+type (
+	MigratePolicyWorkflowService struct {
+		SrcPolicyID  int  `json:"src_policy_id" binding:"required"`
+		DstPolicyID  int  `json:"dst_policy_id" binding:"required"`
+		DeleteSource bool `json:"delete_source"`
+	}
+	CreateMigratePolicyParamCtx struct{}
+)
+
+// CreateMigratePolicyTask starts a background job that copies every entity
+// from one storage policy to another and repoints the entity records.
+func (service *MigratePolicyWorkflowService) CreateMigratePolicyTask(c *gin.Context) (*TaskResponse, error) {
+	dep := dependency.FromContext(c)
+	user := inventory.UserFromContext(c)
+	hasher := dep.HashIDEncoder()
+
+	if !user.Edges.Group.Permissions.Enabled(int(types.GroupPermissionIsAdmin)) {
+		return nil, serializer.NewError(serializer.CodeGroupNotAllowed, "Only admin can migrate storage policies", nil)
+	}
+
+	if service.SrcPolicyID == service.DstPolicyID {
+		return nil, serializer.NewError(serializer.CodeParamErr, "Source and destination policies must differ", nil)
+	}
+
+	sc := dep.StoragePolicyClient()
+	if _, err := sc.GetPolicyByID(c, service.SrcPolicyID); err != nil {
+		return nil, serializer.NewError(serializer.CodePolicyNotExist, "Source policy not found", err)
+	}
+	if _, err := sc.GetPolicyByID(c, service.DstPolicyID); err != nil {
+		return nil, serializer.NewError(serializer.CodePolicyNotExist, "Destination policy not found", err)
+	}
+
+	t, err := workflows.NewMigratePolicyTask(c, user, service.SrcPolicyID, service.DstPolicyID, service.DeleteSource)
+	if err != nil {
+		return nil, serializer.NewError(serializer.CodeCreateTaskError, "Failed to create task", err)
+	}
+
+	if err := dep.MediaMetaQueue(c).QueueTask(c, t); err != nil {
+		return nil, serializer.NewError(serializer.CodeCreateTaskError, "Failed to queue task", err)
+	}
+
+	return BuildTaskResponse(t, nil, hasher), nil
+}

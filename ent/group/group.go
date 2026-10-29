@@ -32,8 +32,6 @@ const (
 	FieldPermissions = "permissions"
 	// FieldSettings holds the string denoting the settings field in the database.
 	FieldSettings = "settings"
-	// FieldStoragePolicyID holds the string denoting the storage_policy_id field in the database.
-	FieldStoragePolicyID = "storage_policy_id"
 	// EdgeUsers holds the string denoting the users edge name in mutations.
 	EdgeUsers = "users"
 	// EdgeStoragePolicies holds the string denoting the storage_policies edge name in mutations.
@@ -47,13 +45,11 @@ const (
 	UsersInverseTable = "users"
 	// UsersColumn is the table column denoting the users relation/edge.
 	UsersColumn = "group_users"
-	// StoragePoliciesTable is the table that holds the storage_policies relation/edge.
-	StoragePoliciesTable = "groups"
+	// StoragePoliciesTable is the table that holds the storage_policies relation/edge. The primary key declared below.
+	StoragePoliciesTable = "storage_policy_groups"
 	// StoragePoliciesInverseTable is the table name for the StoragePolicy entity.
 	// It exists in this package in order to avoid circular dependency with the "storagepolicy" package.
 	StoragePoliciesInverseTable = "storage_policies"
-	// StoragePoliciesColumn is the table column denoting the storage_policies relation/edge.
-	StoragePoliciesColumn = "storage_policy_id"
 )
 
 // Columns holds all SQL columns for group fields.
@@ -67,8 +63,13 @@ var Columns = []string{
 	FieldSpeedLimit,
 	FieldPermissions,
 	FieldSettings,
-	FieldStoragePolicyID,
 }
+
+var (
+	// StoragePoliciesPrimaryKey and StoragePoliciesColumn2 are the table columns denoting the
+	// primary key for the storage_policies relation (M2M).
+	StoragePoliciesPrimaryKey = []string{"storage_policy_id", "group_id"}
+)
 
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
@@ -136,11 +137,6 @@ func BySpeedLimit(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSpeedLimit, opts...).ToFunc()
 }
 
-// ByStoragePolicyID orders the results by the storage_policy_id field.
-func ByStoragePolicyID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldStoragePolicyID, opts...).ToFunc()
-}
-
 // ByUsersCount orders the results by users count.
 func ByUsersCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -155,10 +151,17 @@ func ByUsers(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
-// ByStoragePoliciesField orders the results by storage_policies field.
-func ByStoragePoliciesField(field string, opts ...sql.OrderTermOption) OrderOption {
+// ByStoragePoliciesCount orders the results by storage_policies count.
+func ByStoragePoliciesCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newStoragePoliciesStep(), sql.OrderByField(field, opts...))
+		sqlgraph.OrderByNeighborsCount(s, newStoragePoliciesStep(), opts...)
+	}
+}
+
+// ByStoragePolicies orders the results by storage_policies terms.
+func ByStoragePolicies(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newStoragePoliciesStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
 func newUsersStep() *sqlgraph.Step {
@@ -172,6 +175,6 @@ func newStoragePoliciesStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(StoragePoliciesInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, true, StoragePoliciesTable, StoragePoliciesColumn),
+		sqlgraph.Edge(sqlgraph.M2M, true, StoragePoliciesTable, StoragePoliciesPrimaryKey...),
 	)
 }
