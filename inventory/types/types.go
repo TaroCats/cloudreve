@@ -36,6 +36,13 @@ type (
 		MaxWalkedFiles        int                    `json:"max_walked_files,omitempty"`
 		TrashRetention        int                    `json:"trash_retention,omitempty"`
 		RedirectedSource      bool                   `json:"redirected_source,omitempty"`
+		// DefaultPolicyID is the policy used when no directory binding or
+		// explicit request overrides the choice. 0 means unset.
+		DefaultPolicyID int `json:"default_policy_id,omitempty"`
+		// PolicyQuotas caps per-policy usage for members of this group,
+		// keyed by storage policy ID. A missing entry or 0 means the policy
+		// only falls back to the group-wide MaxStorage limit.
+		PolicyQuotas map[int]int64 `json:"policy_quotas,omitempty"`
 	}
 
 	// PolicySetting 非公有的存储策略属性
@@ -197,6 +204,10 @@ type (
 
 	FileProps struct {
 		View *ExplorerView `json:"view,omitempty"`
+		// BoundPolicyID pins a folder to a specific storage policy. Files
+		// created under the folder inherit this policy unless an explicit
+		// override is given. 0 means unbound.
+		BoundPolicyID int `json:"bound_policy_id,omitempty"`
 	}
 
 	ExplorerView struct {

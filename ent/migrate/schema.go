@@ -200,21 +200,12 @@ var (
 		{Name: "speed_limit", Type: field.TypeInt, Nullable: true},
 		{Name: "permissions", Type: field.TypeBytes},
 		{Name: "settings", Type: field.TypeJSON, Nullable: true},
-		{Name: "storage_policy_id", Type: field.TypeInt, Nullable: true},
 	}
 	// GroupsTable holds the schema information for the "groups" table.
 	GroupsTable = &schema.Table{
 		Name:       "groups",
 		Columns:    GroupsColumns,
 		PrimaryKey: []*schema.Column{GroupsColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "groups_storage_policies_groups",
-				Columns:    []*schema.Column{GroupsColumns[9]},
-				RefColumns: []*schema.Column{StoragePoliciesColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-		},
 	}
 	// MetadataColumns holds the columns for the "metadata" table.
 	MetadataColumns = []*schema.Column{
@@ -526,6 +517,31 @@ var (
 			},
 		},
 	}
+	// StoragePolicyGroupsColumns holds the columns for the "storage_policy_groups" table.
+	StoragePolicyGroupsColumns = []*schema.Column{
+		{Name: "storage_policy_id", Type: field.TypeInt},
+		{Name: "group_id", Type: field.TypeInt},
+	}
+	// StoragePolicyGroupsTable holds the schema information for the "storage_policy_groups" table.
+	StoragePolicyGroupsTable = &schema.Table{
+		Name:       "storage_policy_groups",
+		Columns:    StoragePolicyGroupsColumns,
+		PrimaryKey: []*schema.Column{StoragePolicyGroupsColumns[0], StoragePolicyGroupsColumns[1]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "storage_policy_groups_storage_policy_id",
+				Columns:    []*schema.Column{StoragePolicyGroupsColumns[0]},
+				RefColumns: []*schema.Column{StoragePoliciesColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+			{
+				Symbol:     "storage_policy_groups_group_id",
+				Columns:    []*schema.Column{StoragePolicyGroupsColumns[1]},
+				RefColumns: []*schema.Column{GroupsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		DavAccountsTable,
@@ -545,6 +561,7 @@ var (
 		TasksTable,
 		UsersTable,
 		FileEntitiesTable,
+		StoragePolicyGroupsTable,
 	}
 )
 
@@ -557,7 +574,6 @@ func init() {
 	FilesTable.ForeignKeys[1].RefTable = StoragePoliciesTable
 	FilesTable.ForeignKeys[2].RefTable = UsersTable
 	FsEventsTable.ForeignKeys[0].RefTable = UsersTable
-	GroupsTable.ForeignKeys[0].RefTable = StoragePoliciesTable
 	MetadataTable.ForeignKeys[0].RefTable = FilesTable
 	OauthGrantsTable.ForeignKeys[0].RefTable = OauthClientsTable
 	OauthGrantsTable.ForeignKeys[1].RefTable = UsersTable
@@ -569,4 +585,6 @@ func init() {
 	UsersTable.ForeignKeys[0].RefTable = GroupsTable
 	FileEntitiesTable.ForeignKeys[0].RefTable = FilesTable
 	FileEntitiesTable.ForeignKeys[1].RefTable = EntitiesTable
+	StoragePolicyGroupsTable.ForeignKeys[0].RefTable = StoragePoliciesTable
+	StoragePolicyGroupsTable.ForeignKeys[1].RefTable = GroupsTable
 }

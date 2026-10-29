@@ -83,6 +83,21 @@ func RebuildFTSIndex(c *gin.Context) {
 	})
 }
 
+// MigratePolicy creates a cross-storage-policy migration task
+func MigratePolicy(c *gin.Context) {
+	service := ParametersFromContext[*explorer.MigratePolicyWorkflowService](c, explorer.CreateMigratePolicyParamCtx{})
+	resp, err := service.CreateMigratePolicyTask(c)
+	if err != nil {
+		c.JSON(200, serializer.Err(c, err))
+		c.Abort()
+		return
+	}
+
+	c.JSON(200, serializer.Response{
+		Data: resp,
+	})
+}
+
 // ExtractArchive creates extract archive task
 func ExtractArchive(c *gin.Context) {
 	service := ParametersFromContext[*explorer.ArchiveWorkflowService](c, explorer.CreateArchiveParamCtx{})
@@ -430,6 +445,18 @@ func DeleteVersion(c *gin.Context) {
 
 func PatchView(c *gin.Context) {
 	service := ParametersFromContext[*explorer.PatchViewService](c, explorer.PatchViewParameterCtx{})
+	err := service.Patch(c)
+	if err != nil {
+		c.JSON(200, serializer.Err(c, err))
+		c.Abort()
+		return
+	}
+
+	c.JSON(200, serializer.Response{})
+}
+
+func PatchPolicyBinding(c *gin.Context) {
+	service := ParametersFromContext[*explorer.PatchPolicyBindingService](c, explorer.PatchPolicyBindingParamCtx{})
 	err := service.Patch(c)
 	if err != nil {
 		c.JSON(200, serializer.Err(c, err))

@@ -24,7 +24,6 @@ func (Group) Fields() []ent.Field {
 		field.JSON("settings", &types.GroupSetting{}).
 			Default(&types.GroupSetting{}).
 			Optional(),
-		field.Int("storage_policy_id").Optional(),
 	}
 }
 
@@ -37,9 +36,10 @@ func (Group) Mixin() []ent.Mixin {
 func (Group) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("users", User.Type),
+		// Many-to-many: a group may bind multiple storage policies,
+		// and a policy may serve multiple groups. Per-policy quota lives
+		// in GroupSetting.PolicyQuotas keyed by policy ID.
 		edge.From("storage_policies", StoragePolicy.Type).
-			Ref("groups").
-			Field("storage_policy_id").
-			Unique(),
+			Ref("groups"),
 	}
 }

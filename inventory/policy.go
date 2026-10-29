@@ -28,8 +28,8 @@ type (
 
 	StoragePolicyClient interface {
 		TxOperator
-		// GetByGroup returns the storage policies of the group.
-		GetByGroup(ctx context.Context, group *ent.Group) (*ent.StoragePolicy, error)
+		// ListByGroup returns all storage policies bound to the group.
+		ListByGroup(ctx context.Context, group *ent.Group) ([]*ent.StoragePolicy, error)
 		// GetPolicyByID returns the storage policy by id.
 		GetPolicyByID(ctx context.Context, id int) (*ent.StoragePolicy, error)
 		// UpdateAccessKey updates the access key of the storage policy. It also clear related cache in KV.
@@ -142,11 +142,9 @@ func (c *storagePolicyClient) Upsert(ctx context.Context, policy *ent.StoragePol
 
 }
 
-func (c *storagePolicyClient) GetByGroup(ctx context.Context, group *ent.Group) (*ent.StoragePolicy, error) {
-	val, skipCache := ctx.Value(SkipStoragePolicyCache{}).(bool)
-	skipCache = skipCache && val
-
-	res, err := withStoragePolicyEagerLoading(ctx, c.client.Group.QueryStoragePolicies(group)).WithNode().First(ctx)
+// ListByGroup returns all storage policies bound to the given group.
+func (c *storagePolicyClient) ListByGroup(ctx context.Context, group *ent.Group) ([]*ent.StoragePolicy, error) {
+	res, err := withStoragePolicyEagerLoading(ctx, c.client.Group.QueryStoragePolicies(group)).WithNode().All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get storage policies: %w", err)
 	}

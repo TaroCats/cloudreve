@@ -38,3 +38,5 @@ tmp/
 .devcontainer/
 cloudreve
 .DS_Store
+assets/.yarn-cache
+assets/node_modules

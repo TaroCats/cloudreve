@@ -159,7 +159,7 @@ func migrateAdminGroup(l logging.Logger, client *ent.Client, ctx context.Context
 	}, permissions)
 	if _, err := client.Group.Create().
 		SetName("Admin").
-		SetStoragePoliciesID(1).
+		AddStoragePolicyIDs(1).
 		SetMaxStorage(1 * constants.TB). // 1 TB default storage
 		SetPermissions(permissions).
 		SetSettings(&types.GroupSetting{
@@ -168,6 +168,7 @@ func migrateAdminGroup(l logging.Logger, client *ent.Client, ctx context.Context
 			MaxWalkedFiles:   100000,
 			TrashRetention:   7 * 24 * 3600,
 			RedirectedSource: true,
+			DefaultPolicyID:  1,
 		}).
 		Save(ctx); err != nil {
 		return fmt.Errorf("failed to create default admin group: %w", err)
@@ -191,7 +192,7 @@ func migrateUserGroup(l logging.Logger, client *ent.Client, ctx context.Context)
 	}, permissions)
 	if _, err := client.Group.Create().
 		SetName("User").
-		SetStoragePoliciesID(1).
+		AddStoragePolicyIDs(1).
 		SetMaxStorage(1 * constants.GB). // 1 GB default storage
 		SetPermissions(permissions).
 		SetSettings(&types.GroupSetting{
@@ -200,6 +201,7 @@ func migrateUserGroup(l logging.Logger, client *ent.Client, ctx context.Context)
 			MaxWalkedFiles:   100000,
 			TrashRetention:   7 * 24 * 3600,
 			RedirectedSource: true,
+			DefaultPolicyID:  1,
 		}).
 		Save(ctx); err != nil {
 		return fmt.Errorf("failed to create default user group: %w", err)
@@ -599,13 +601,93 @@ var patches = []Patch{
 		},
 	},
 	{
-		Name:       "reset_secret_key",
+		Name:       "		reset_secret_key",
 		EndVersion: "4.13.0",
 		Func: func(l logging.Logger, client *ent.Client, ctx context.Context) error {
 			newSecretKey := util.RandStringRunesCrypto(256)
 			ctx = context.WithValue(ctx, debug.SkipDbLogging{}, true)
 			if err := client.Setting.Update().Where(setting.Name("secret_key")).SetValue(newSecretKey).Exec(ctx); err != nil {
 				return fmt.Errorf("failed to update secret_key setting: %w", err)
+			}
+
+			return nil
+		},
+	},
+	{
+		Name:       "migrate_group_single_policy_to_m2m",
+		EndVersion: "4.15.0",
+		Func: func(l logging.Logger, client *ent.Client, ctx context.Context) error {
+			// Legacy installs stored one policy per group in groups.storage_policy_id.
+			// That column is no longer part of the schema but is preserved by ent's
+			// additive auto-migration, so we can still read it here and fan it out
+			// into the new storage_policy_groups join table.
+			ctx = context.WithValue(ctx, debug.SkipDbLogging{}, true)
+
+			// Detect the legacy column; a fresh install never has it.
+			legacyRows, err := client.QueryContext(ctx,
+				"SELECT id, storage_policy_id FROM groups WHERE storage_policy_id IS NOT NULL AND storage_policy_id > 0")
+			if err != nil {
+				l.Info("Legacy groups.storage_policy_id column not present, skip multi-policy migration.")
+				return nil
+			}
+
+			type legacyBinding struct{ groupID, policyID int }
+			var bindings []legacyBinding
+			for legacyRows.Next() {
+				var b legacyBinding
+				if err := legacyRows.Scan(&b.groupID, &b.policyID); err != nil {
+					legacyRows.Close()
+					return fmt.Errorf("failed to scan legacy policy binding: %w", err)
+				}
+				bindings = append(bindings, b)
+			}
+			legacyRows.Close()
+			if err := legacyRows.Err(); err != nil {
+				return fmt.Errorf("failed to read legacy policy bindings: %w", err)
+			}
+
+			if len(bindings) == 0 {
+				l.Info("No legacy single-policy groups to migrate.")
+				return nil
+			}
+
+			for _, b := range bindings {
+				// Skip if the binding already exists (idempotent).
+				checkRows, err := client.QueryContext(ctx,
+					"SELECT 1 FROM storage_policy_groups WHERE group_id = ? AND storage_policy_id = ? LIMIT 1",
+					b.groupID, b.policyID)
+				if err != nil {
+					return fmt.Errorf("failed to check existing binding for group %d: %w", b.groupID, err)
+				}
+				exists := checkRows.Next()
+				checkRows.Close()
+				if exists {
+					continue
+				}
+
+				if _, err := client.ExecContext(ctx,
+					"INSERT INTO storage_policy_groups (group_id, storage_policy_id) VALUES (?, ?)",
+					b.groupID, b.policyID); err != nil {
+					return fmt.Errorf("failed to bind policy %d to group %d: %w", b.policyID, b.groupID, err)
+				}
+
+				// Record the legacy policy as the group default so resolution
+				// order keeps matching the old single-policy behaviour.
+				g, err := client.Group.Query().Where(group.ID(b.groupID)).Only(ctx)
+				if err != nil {
+					return fmt.Errorf("failed to load group %d: %w", b.groupID, err)
+				}
+				if g.Settings == nil {
+					g.Settings = &types.GroupSetting{}
+				}
+				if g.Settings.DefaultPolicyID == 0 {
+					g.Settings.DefaultPolicyID = b.policyID
+					if err := client.Group.UpdateOne(g).SetSettings(g.Settings).Exec(ctx); err != nil {
+						return fmt.Errorf("failed to set default policy for group %d: %w", b.groupID, err)
+					}
+				}
+
+				l.Info("Migrated group %d to storage policy %d.", b.groupID, b.policyID)
 			}
 
 			return nil

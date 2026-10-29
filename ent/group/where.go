@@ -91,11 +91,6 @@ func Permissions(v *boolset.BooleanSet) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldPermissions, v))
 }
 
-// StoragePolicyID applies equality check predicate on the "storage_policy_id" field. It's identical to StoragePolicyIDEQ.
-func StoragePolicyID(v int) predicate.Group {
-	return predicate.Group(sql.FieldEQ(FieldStoragePolicyID, v))
-}
-
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldCreatedAt, v))
@@ -441,36 +436,6 @@ func SettingsNotNil() predicate.Group {
 	return predicate.Group(sql.FieldNotNull(FieldSettings))
 }
 
-// StoragePolicyIDEQ applies the EQ predicate on the "storage_policy_id" field.
-func StoragePolicyIDEQ(v int) predicate.Group {
-	return predicate.Group(sql.FieldEQ(FieldStoragePolicyID, v))
-}
-
-// StoragePolicyIDNEQ applies the NEQ predicate on the "storage_policy_id" field.
-func StoragePolicyIDNEQ(v int) predicate.Group {
-	return predicate.Group(sql.FieldNEQ(FieldStoragePolicyID, v))
-}
-
-// StoragePolicyIDIn applies the In predicate on the "storage_policy_id" field.
-func StoragePolicyIDIn(vs ...int) predicate.Group {
-	return predicate.Group(sql.FieldIn(FieldStoragePolicyID, vs...))
-}
-
-// StoragePolicyIDNotIn applies the NotIn predicate on the "storage_policy_id" field.
-func StoragePolicyIDNotIn(vs ...int) predicate.Group {
-	return predicate.Group(sql.FieldNotIn(FieldStoragePolicyID, vs...))
-}
-
-// StoragePolicyIDIsNil applies the IsNil predicate on the "storage_policy_id" field.
-func StoragePolicyIDIsNil() predicate.Group {
-	return predicate.Group(sql.FieldIsNull(FieldStoragePolicyID))
-}
-
-// StoragePolicyIDNotNil applies the NotNil predicate on the "storage_policy_id" field.
-func StoragePolicyIDNotNil() predicate.Group {
-	return predicate.Group(sql.FieldNotNull(FieldStoragePolicyID))
-}
-
 // HasUsers applies the HasEdge predicate on the "users" edge.
 func HasUsers() predicate.Group {
 	return predicate.Group(func(s *sql.Selector) {
@@ -499,7 +464,7 @@ func HasStoragePolicies() predicate.Group {
 	return predicate.Group(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, StoragePoliciesTable, StoragePoliciesColumn),
+			sqlgraph.Edge(sqlgraph.M2M, true, StoragePoliciesTable, StoragePoliciesPrimaryKey...),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})

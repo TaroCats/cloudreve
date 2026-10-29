@@ -125,10 +125,27 @@ func (f *DBFS) PrepareUpload(ctx context.Context, req *fs.UploadRequest, opts ..
 	var (
 		policy *ent.StoragePolicy
 	)
-	if req.ImportFrom == nil {
-		policy, err = f.getPreferredPolicy(ctx, ancestor)
-	} else {
+	if req.ImportFrom != nil {
 		policy, err = f.storagePolicyClient.GetPolicyByID(ctx, req.Props.PreferredStoragePolicy)
+	} else if req.Props.PreferredStoragePolicy > 0 {
+		// Explicit override: must be one of the group's bound policies.
+		var candidates []*ent.StoragePolicy
+		_, candidates, err = f.resolvePolicyFor(ctx, ancestor)
+		if err == nil {
+			var found bool
+			for _, p := range candidates {
+				if p.ID == req.Props.PreferredStoragePolicy {
+					policy, found = p, true
+					break
+				}
+			}
+			if !found {
+				err = serializer.NewError(serializer.CodePolicyNotAllowed,
+					"Requested storage policy is not available to your group", nil)
+			}
+		}
+	} else {
+		policy, err = f.getPreferredPolicy(ctx, ancestor)
 	}
 	if err != nil {
 		return nil, err
@@ -159,6 +176,11 @@ func (f *DBFS) PrepareUpload(ctx context.Context, req *fs.UploadRequest, opts ..
 		return nil, fmt.Errorf("failed to get user capacity: %s", err)
 	}
 	if err := f.validateUserCapacityRaw(ctx, req.Props.Size, capacity); err != nil {
+		return nil, err
+	}
+
+	// Enforce per-policy quota when the group defines one for this policy.
+	if err := f.validatePolicyQuota(ctx, owner, policy, req.Props.Size); err != nil {
 		return nil, err
 	}
 

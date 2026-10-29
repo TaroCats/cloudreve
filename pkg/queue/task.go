@@ -111,6 +111,8 @@ const (
 	FullTextDeleteTaskType      = "full_text_delete"
 	FullTextRebuildTaskType     = "full_text_rebuild"
 
+	PolicyMigrateTaskType = "policy_migrate"
+
 	SlaveCreateArchiveTaskType = "slave_create_archive"
 	SlaveUploadTaskType        = "slave_upload"
 	SlaveExtractArchiveType    = "slave_extract_archive"

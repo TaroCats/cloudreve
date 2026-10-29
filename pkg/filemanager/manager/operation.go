@@ -380,6 +380,22 @@ func (m *manager) PatchView(ctx context.Context, uri *fs.URI, view *types.Explor
 	return nil
 }
 
+// PatchPolicyBinding binds (policyID > 0) or unbinds (policyID == 0) a
+// storage policy on the target folder. The binding is validated against the
+// owner's group policies inside the fs layer.
+func (m *manager) PatchPolicyBinding(ctx context.Context, uri *fs.URI, policyID int) error {
+	if policyID < 0 {
+		return serializer.NewError(serializer.CodeParamErr, "invalid storage policy id", nil)
+	}
+
+	patch := &types.FileProps{BoundPolicyID: policyID}
+	if err := m.fs.PatchProps(ctx, uri, patch, policyID == 0); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func getEntityDisplayName(f fs.File, e fs.Entity) string {
 	switch e.Type() {
 	case types.EntityTypeThumbnail:
